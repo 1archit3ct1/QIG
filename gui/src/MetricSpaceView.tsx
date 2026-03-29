@@ -22,7 +22,7 @@ type ProjectedPoint = {
 }
 
 const WIDTH = 740
-const HEIGHT = 340
+const HEIGHT = 560
 const CENTER_X = WIDTH / 2
 const CENTER_Y = HEIGHT / 2
 
