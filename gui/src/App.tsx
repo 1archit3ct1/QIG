@@ -12,6 +12,8 @@ import {
 import { parseSimulationOutput, type SimulationId } from './outputParser'
 import './App.css'
 
+type UiTheme = 'runway-tech' | 'utility-street' | 'cyber-minimal'
+
 type SimulationResult = {
   simulation: SimulationId
   command: string
@@ -44,8 +46,39 @@ const SIMULATIONS: Array<{ id: SimulationId; label: string; detail: string }> = 
   },
 ]
 
+const THEMES: Array<{ id: UiTheme; label: string }> = [
+  { id: 'runway-tech', label: 'Runway Tech' },
+  { id: 'utility-street', label: 'Utility Street' },
+  { id: 'cyber-minimal', label: 'Cyber Minimal' },
+]
+
+const CHART_COLORS: Record<UiTheme, { grid: string; tick: string; border: string; bg: string; line: string }> = {
+  'runway-tech': {
+    grid: '#c8d8ff',
+    tick: '#5a6b95',
+    border: '#bfd0ff',
+    bg: '#f7fbff',
+    line: '#1f56ff',
+  },
+  'utility-street': {
+    grid: '#d9d4c9',
+    tick: '#585248',
+    border: '#c8c1b4',
+    bg: '#f9f7f2',
+    line: '#2f6f54',
+  },
+  'cyber-minimal': {
+    grid: '#30384e',
+    tick: '#a5b1d9',
+    border: '#44527c',
+    bg: '#161d2f',
+    line: '#35d1ff',
+  },
+}
+
 function App() {
   const [selected, setSelected] = useState<SimulationId>('all')
+  const [theme, setTheme] = useState<UiTheme>('runway-tech')
   const [preferLinux, setPreferLinux] = useState(true)
   const [isRunning, setIsRunning] = useState(false)
   const [result, setResult] = useState<SimulationResult | null>(null)
@@ -62,6 +95,8 @@ function App() {
     }
     return parseSimulationOutput(result.simulation, result.stdout)
   }, [result])
+
+  const chartColors = CHART_COLORS[theme]
 
   async function runSelectedSimulation() {
     setIsRunning(true)
@@ -81,13 +116,25 @@ function App() {
   }
 
   return (
-    <main className="layout">
+    <main className="layout" data-theme={theme}>
       <header className="hero">
         <p className="eyebrow">QIG Desktop Lab</p>
         <h1>Quantum Simulation Control Panel</h1>
         <p className="subtitle">
           Run geometry, holographic, and complexity simulations from a Tauri desktop frontend.
         </p>
+        <div className="theme-switch" aria-label="Theme selector">
+          {THEMES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={theme === item.id ? 'theme-chip active' : 'theme-chip'}
+              onClick={() => setTheme(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </header>
 
       <section className="panel config-panel">
@@ -201,27 +248,27 @@ function App() {
                     <div className="chart-wrap">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chart.points} margin={{ top: 10, right: 16, left: 8, bottom: 10 }}>
-                          <CartesianGrid strokeDasharray="4 4" stroke="#e5c8a6" />
+                          <CartesianGrid strokeDasharray="4 4" stroke={chartColors.grid} />
                           <XAxis
                             dataKey="x"
-                            tick={{ fill: '#6f472f', fontSize: 12 }}
+                            tick={{ fill: chartColors.tick, fontSize: 12 }}
                             label={{ value: chart.xLabel, position: 'insideBottom', dy: 8 }}
                           />
                           <YAxis
-                            tick={{ fill: '#6f472f', fontSize: 12 }}
+                            tick={{ fill: chartColors.tick, fontSize: 12 }}
                             label={{ value: chart.yLabel, angle: -90, dx: -8 }}
                           />
                           <Tooltip
                             contentStyle={{
                               borderRadius: 10,
-                              border: '1px solid #e2b180',
-                              background: '#fff8ef',
+                              border: `1px solid ${chartColors.border}`,
+                              background: chartColors.bg,
                             }}
                           />
                           <Line
                             type="monotone"
                             dataKey="y"
-                            stroke="#b9531f"
+                            stroke={chartColors.line}
                             strokeWidth={2}
                             dot={false}
                             activeDot={{ r: 4 }}

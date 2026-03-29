@@ -34,7 +34,17 @@ fn shell_escape_single_quoted(value: &str) -> String {
 }
 
 fn to_wsl_path(path: &Path) -> String {
-  let raw = path.to_string_lossy().replace('\\', "/");
+  let mut raw = path.to_string_lossy().to_string();
+
+  // Strip Windows extended-length prefixes that break WSL path translation.
+  if let Some(stripped) = raw.strip_prefix(r"\\?\") {
+    raw = stripped.to_string();
+  }
+  if let Some(stripped) = raw.strip_prefix("//?/") {
+    raw = stripped.to_string();
+  }
+
+  let raw = raw.replace('\\', "/");
   let bytes = raw.as_bytes();
   if bytes.len() > 2 && bytes[1] == b':' {
     let drive = raw[0..1].to_lowercase();

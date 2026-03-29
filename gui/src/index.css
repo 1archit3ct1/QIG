@@ -1,11 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap');
 
 :root {
-  --ink: #2c1c14;
-  --muted: #73513a;
-  --line: #e2b180;
+  --ink: #1a1f2e;
+  --ink-soft: #3e4966;
+  --muted: #586483;
+  --line: #bfd0ff;
+  --panel: rgba(247, 250, 255, 0.86);
+  --panel-strong: #f4f8ff;
+  --hero-start: #dff3ff;
+  --hero-mid: #ffe9f6;
+  --hero-end: #fff1da;
+  --accent: #1f56ff;
+  --accent-2: #00b8d9;
+  --accent-3: #ff4f9a;
+  --ok-bg: #dff9eb;
+  --ok-fg: #12603c;
+  --fail-bg: #ffe7ee;
+  --fail-fg: #a2194a;
   --mono: 'IBM Plex Mono', Consolas, monospace;
-  --sans: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+  --sans: 'Sora', 'Trebuchet MS', sans-serif;
   font-family: var(--sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -22,9 +35,10 @@ body {
   min-height: 100vh;
   color: var(--ink);
   background:
-    radial-gradient(circle at 10% 10%, #fff3d5 0%, transparent 32%),
-    radial-gradient(circle at 90% 0%, #ffd9aa 0%, transparent 28%),
-    linear-gradient(180deg, #ffefd8 0%, #ffe9cd 56%, #ffe4be 100%);
+    radial-gradient(circle at 8% 12%, rgba(0, 184, 217, 0.2) 0%, transparent 34%),
+    radial-gradient(circle at 92% 4%, rgba(255, 79, 154, 0.18) 0%, transparent 29%),
+    radial-gradient(circle at 68% 80%, rgba(31, 86, 255, 0.14) 0%, transparent 26%),
+    linear-gradient(170deg, #f2f8ff 0%, #f6f0ff 44%, #fff6eb 100%);
 }
 
 #root {
@@ -39,10 +53,11 @@ p {
 }
 
 h1 {
-  font-size: clamp(1.7rem, 2.8vw, 2.6rem);
-  line-height: 1.1;
+  font-size: clamp(1.8rem, 2.9vw, 2.85rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
 }
 
 h2 {
-  font-size: 1.15rem;
+  font-size: 1.14rem;
 }
