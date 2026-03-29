@@ -28,6 +28,7 @@ export type ComplexityMetrics = {
   dcdt: number | null
   lloydFraction: number | null
   bulkVolume: number | null
+  meanDcdt: number | null
 }
 
 export type ComplexityRateSample = {
@@ -107,6 +108,7 @@ export function parseComplexityMetrics(stdout: string): ComplexityMetrics | null
   const dcdt = extractLastFloat(/Complexity growth rate dC\/dt:\s*([0-9]+\.?[0-9]*)/g, stdout)
   const lloydFraction = extractLastPercent(/Efficiency \(Lloyd fraction\):\s*([0-9]+\.?[0-9]*)%/g, stdout)
   const bulkVolume = extractLastFloat(/Bulk volume V = C\*G_N\*l:\s*([0-9]+\.?[0-9]*)/g, stdout)
+  const meanDcdt = extractLastFloat(/Mean dC\/dt over simulation:\s*([0-9]+\.?[0-9]*)/g, stdout)
 
   const gateMatches = Array.from(
     stdout.matchAll(/C=([0-9]+\.?[0-9]*),\s*dC\/dt=([0-9]+\.?[0-9]*),\s*Lloyd=([0-9]+\.?[0-9]*)%(?:,\s*V=([0-9]+\.?[0-9]*))?/g),
@@ -123,6 +125,7 @@ export function parseComplexityMetrics(stdout: string): ComplexityMetrics | null
     dcdt: dcdt ?? fallbackDcdt,
     lloydFraction: lloydFraction ?? fallbackLloydFraction,
     bulkVolume: bulkVolume ?? fallbackBulkVolume,
+    meanDcdt: meanDcdt ?? null,
   }
 
   return Object.values(metrics).some((value) => value !== null)
@@ -145,7 +148,8 @@ export function parseComplexityRateSeries(stdout: string): ComplexityRateSample[
     })
   }
 
-  return points.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+  const valid = points.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+  return valid.map((point, index) => ({ x: index + 1, y: point.y }))
 }
 
 export function parseSimulationOutput(

@@ -395,7 +395,8 @@ function App() {
     if (!result) {
       return []
     }
-    return parseComplexityRateSeries(result.stdout)
+    const all = parseComplexityRateSeries(result.stdout)
+    return all.slice(-1000)
   }, [result])
 
   const baselineParsed = useMemo(() => {
@@ -1081,6 +1082,10 @@ function App() {
                 <p>{complexityMetrics.dcdt?.toFixed(6) ?? '—'}</p>
               </article>
               <article>
+                <h3>Mean dC/dt (avg)</h3>
+                <p>{complexityMetrics.meanDcdt?.toFixed(6) ?? '—'}</p>
+              </article>
+              <article>
                 <h3>Lloyd Fraction</h3>
                 <p>{complexityMetrics.lloydFraction !== null ? `${(complexityMetrics.lloydFraction * 100).toFixed(1)}%` : '—'}</p>
               </article>
@@ -1105,7 +1110,12 @@ function App() {
                         dataKey="x"
                         tick={{ fill: chartColors.tick, fontSize: 12 }}
                         stroke={chartColors.border}
-                        domain={['dataMin', 'dataMax']}
+                        domain={[1, Math.max(complexityRateSeries.length, 1)]}
+                        ticks={complexityRateSeries.length <= 6
+                          ? complexityRateSeries.map(p => p.x)
+                          : [1, Math.round(complexityRateSeries.length / 4), Math.round(complexityRateSeries.length / 2), Math.round((complexityRateSeries.length * 3) / 4), complexityRateSeries.length]
+                        }
+                        tickFormatter={(value) => String(Math.round(value))}
                       />
                       <YAxis
                         type="number"
@@ -1117,7 +1127,7 @@ function App() {
                       />
                       <Tooltip
                         formatter={(value) => Number(value).toFixed(6)}
-                        labelFormatter={(value) => `t = ${Number(value).toFixed(3)}`}
+                        labelFormatter={(value) => `Step ${Math.round(Number(value))}`}
                         contentStyle={{
                           borderRadius: 10,
                           border: `1px solid ${chartColors.border}`,

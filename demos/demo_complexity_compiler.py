@@ -65,6 +65,14 @@ def demo_complexity():
     print(tracker.summary())
     print()
 
+    # Compute mean dC/dt from history
+    if tracker.history:
+        dcdt_values = [snapshot.dcdt for snapshot in tracker.history if snapshot.dcdt is not None]
+        if dcdt_values:
+            mean_dcdt = sum(dcdt_values) / len(dcdt_values)
+            print(f"  Mean dC/dt over simulation: {mean_dcdt:.6f}")
+    print()
+
     # Compare algorithms
     print("─" * 50)
     print("ALGORITHM COMPLEXITY COMPARISON")
