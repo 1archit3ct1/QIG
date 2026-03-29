@@ -84,6 +84,37 @@ GPU note:
 - Use WSL2 + NVIDIA drivers + CUDA-enabled Linux packages for acceleration.
 - This repository setup is Linux-ready; GPU acceleration depends on your WSL GPU stack.
 
+### Desktop GUI (Vite + React + Tauri)
+
+The repository now includes a desktop GUI in [gui](gui) that runs simulations from a control panel.
+
+Prerequisites:
+- Node.js and npm
+- Rust/Cargo
+- Existing Python environments in this repo: [.venv](.venv) and/or [.venv-linux](.venv-linux)
+
+Run desktop app in dev mode:
+
+```bash
+cd gui
+npm install
+npm run tauri:dev
+```
+
+Build desktop app:
+
+```bash
+cd gui
+npm run tauri:build
+```
+
+Frontend-only build check:
+
+```bash
+cd gui
+npm run build
+```
+
 ---
 
 ## Key Concepts Implemented

@@ -1,0 +1,99 @@
+{
+	"project": "QIG",
+	"execution_mode": "sequential",
+	"tasks": [
+		{
+			"id": 1,
+			"title": "Validate frontend toolchain",
+			"status": "completed",
+			"details": "Check Node, npm, Rust, and Cargo availability for Vite + Tauri setup.",
+			"result": {
+				"node": "v24.14.0",
+				"npm": "11.9.0",
+				"rustc": "1.94.0",
+				"cargo": "1.94.0"
+			}
+		},
+		{
+			"id": 2,
+			"title": "Scaffold Vite React frontend",
+			"status": "completed",
+			"details": "Create a React + TypeScript app in gui/ and install dependencies.",
+			"result": {
+				"path": "gui",
+				"dependencies_installed": true
+			}
+		},
+		{
+			"id": 3,
+			"title": "Add Tauri desktop shell",
+			"status": "completed",
+			"details": "Initialize src-tauri and wire Tauri config to run the Vite frontend.",
+			"result": {
+				"src_tauri_created": true,
+				"tauri_scripts_added": ["tauri:dev", "tauri:build"]
+			}
+		},
+		{
+			"id": 4,
+			"title": "Implement Python simulation bridge",
+			"status": "completed",
+			"details": "Create Tauri commands that run Python demo scripts and return structured output.",
+			"result": {
+				"commands": ["list_simulations", "run_simulation"],
+				"linux_fallback": "WSL preferred, native Python fallback"
+			}
+		},
+		{
+			"id": 5,
+			"title": "Build QIG control panel UI",
+			"status": "completed",
+			"details": "Add UI to run simulations, show status, and display output logs.",
+			"result": {
+				"simulation_buttons": 4,
+				"output_panels": ["stdout", "stderr"]
+			}
+		},
+		{
+			"id": 6,
+			"title": "Document and verify workflow",
+			"status": "completed",
+			"details": "Add run/build instructions and execute smoke checks.",
+			"result": {
+				"checks": ["npm run build", "cargo check"],
+				"readme_updated": true
+			}
+		},
+		{
+			"id": 7,
+			"title": "Add charting dependency",
+			"status": "completed",
+			"details": "Install a chart library for plotting parsed simulation metrics in the desktop UI.",
+			"result": {
+				"dependency": "recharts",
+				"installed": true
+			}
+		},
+		{
+			"id": 8,
+			"title": "Implement structured output parsing",
+			"status": "completed",
+			"details": "Parse simulation stdout into typed metric series and key-value summaries.",
+			"result": {
+				"parser_file": "gui/src/outputParser.ts",
+				"outputs": ["metric_cards", "chart_series"]
+			}
+		},
+		{
+			"id": 9,
+			"title": "Render simulation charts",
+			"status": "completed",
+			"details": "Add responsive charts and metric cards to visualize parsed output in the frontend.",
+			"result": {
+				"library": "recharts",
+				"ui_sections": ["Structured Metrics", "Page Curve", "Complexity Trajectory"],
+				"build_checks": ["npm run build", "cargo check"]
+			}
+		}
+	]
+}
