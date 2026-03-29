@@ -638,7 +638,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             y1={edge.from.y2d}
             x2={edge.to.x2d}
             y2={edge.to.y2d}
-            stroke="rgba(0, 255, 65, 0.72)"
+            stroke="rgba(31, 170, 67, 0.72)"
             strokeWidth={0.8}
             strokeDasharray="3 2"
             opacity={0.44}
@@ -665,7 +665,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             y1={seg.from.y2d}
             x2={seg.to.x2d}
             y2={seg.to.y2d}
-            stroke="rgba(0, 255, 65, 0.46)"
+            stroke="rgba(31, 170, 67, 0.46)"
             strokeWidth={0.75}
             opacity={0.52}
           />
@@ -750,8 +750,8 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             cx={point.x2d}
             cy={point.y2d}
             r={Math.max(1.8, point.radius - 1.2)}
-            fill="rgba(0, 255, 65, 0.22)"
-            stroke="rgba(0, 255, 65, 0.74)"
+            fill="rgba(31, 170, 67, 0.22)"
+            stroke="rgba(31, 170, 67, 0.74)"
             strokeWidth={0.8}
           />
         ))}
@@ -793,7 +793,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             <h4>Anchor Plane Sliders (39)</h4>
             <div className="metric16d-grid">
               {PLANE_LAYOUT.anchorPlanes.map((plane) => (
-                <label key={plane.key} className="metric4d-plane-row metric16d-plane-row">
+                <label key={plane.key} className="metric4d-plane-row metric16d-plane-row metric4d-plane-row-16d">
                   <span>{plane.label}</span>
                   <input
                     type="range"
@@ -813,7 +813,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             <h4>Latent Chain Sliders (12)</h4>
             <div className="metric16d-grid metric16d-grid-chain">
               {PLANE_LAYOUT.chainPlanes.map((plane) => (
-                <label key={plane.key} className="metric4d-plane-row metric16d-plane-row">
+                <label key={plane.key} className="metric4d-plane-row metric16d-plane-row metric4d-plane-row-16d">
                   <span>{plane.label}</span>
                   <input
                     type="range"
@@ -836,7 +836,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
           <span style={{ color: 'rgb(168,96,255)' }}>chroma high</span>
           <span style={{ color: 'rgba(145,153,187,1)' }}>4D delta</span>
           <span style={{ color: 'rgba(255,56,56,1)' }}>8D delta</span>
-          <span style={{ color: 'rgba(0,255,65,1)' }}>16D delta</span>
+          <span style={{ color: 'rgba(31,170,67,1)' }}>16D delta</span>
         </div>
       </div>
     </div>

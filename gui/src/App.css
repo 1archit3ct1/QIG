@@ -680,7 +680,7 @@
 }
 
 .metric-delta-toggle-16d {
-  color: #00ff41;
+  color: #1faa43;
   font-weight: 700;
 }
 
@@ -742,9 +742,25 @@
   color: #ff3838;
 }
 
+.metric4d-plane-row-16d span {
+  color: #1faa43;
+}
+
 .metric4d-plane-row input[type='range'] {
   width: 140px;
   accent-color: var(--accent-3);
+}
+
+.metric4d-plane-row-4d input[type='range'] {
+  accent-color: #4f7fff;
+}
+
+.metric4d-plane-row-8d input[type='range'] {
+  accent-color: #ff3838;
+}
+
+.metric4d-plane-row-16d input[type='range'] {
+  accent-color: #1faa43;
 }
 
 .metric4d-plane-row code {
