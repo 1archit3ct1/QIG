@@ -75,6 +75,16 @@ function finiteOrZero(value: number): number {
   return Number.isFinite(value) ? value : 0
 }
 
+function stabilizeDenominator(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 1e-6
+  }
+  if (Math.abs(value) < 1e-6) {
+    return value < 0 ? -1e-6 : 1e-6
+  }
+  return value
+}
+
 function planeKey(i: number, j: number): string {
   const a = Math.min(i, j)
   const b = Math.max(i, j)
@@ -148,26 +158,13 @@ function initialAngles8D(): Record<string, number> {
 }
 
 function normalizeVec16(vec: number[]): number[] {
-  let sumSq = 0
-  for (let i = 0; i < 16; i += 1) {
-    sumSq += vec[i] * vec[i]
-  }
-  const norm = Math.sqrt(sumSq)
-  if (!Number.isFinite(norm) || norm <= 1e-8) {
-    return vec
-  }
-  const scale = Math.min(1, 1.25 / norm)
-  return vec.map((v) => v * scale)
+  return vec
 }
 
 function rotatePlane(vec: number[], i: number, j: number, angle: number): void {
-  // Constrained Givens rotation: bounded angle and attenuation by plane index.
-  const bounded = clamp(angle, -1.35, 1.35)
-  const attenuation = 1 / Math.sqrt(1 + 0.18 * Math.max(i, j))
-  const eff = bounded * attenuation
-
-  const c = Math.cos(eff)
-  const s = Math.sin(eff)
+  const effectiveAngle = Number.isFinite(angle) ? angle : 0
+  const c = Math.cos(effectiveAngle)
+  const s = Math.sin(effectiveAngle)
   const vi = vec[i]
   const vj = vec[j]
   vec[i] = vi * c - vj * s
@@ -189,8 +186,8 @@ function reduce16To4(vec16: Vec16): { xyzw: Vec4; chroma: number } {
 
   for (let last = 15; last >= 4; last -= 1) {
     const dist = DIST_REDUCTION[last]
-    const denom = clamp(dist - v[last], 1.1, 99)
-    const factor = clamp(dist / denom, 0.62, 1.72)
+    const denom = stabilizeDenominator(dist - v[last])
+    const factor = dist / denom
     for (let i = 0; i < last; i += 1) {
       v[i] *= factor
     }
@@ -200,7 +197,7 @@ function reduce16To4(vec16: Vec16): { xyzw: Vec4; chroma: number } {
   const chroma = (vec16[3] + vec16[4] + vec16[5] + vec16[6] + vec16[7]) / 5
   return {
     xyzw: [v[0], v[1], v[2], v[3]],
-    chroma: clamp(chroma, -1.8, 1.8),
+    chroma,
   }
 }
 
@@ -226,7 +223,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
   const [show8DDelta, setShow8DDelta] = useState(true)
   const [show16DDelta, setShow16DDelta] = useState(true)
 
-  // 16D constrained rotation controls.
+  // 16D rotation controls.
   const [angles, setAngles] = useState<Record<string, number>>(() => initialAngles())
   const [angles8D, setAngles8D] = useState<Record<string, number>>(() => initialAngles8D())
 
@@ -248,7 +245,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
       rotatePlane(vec, 0, 2, rotXZ)
       rotatePlane(vec, 1, 2, rotYZ)
 
-      // Constrained higher-dimensional subspace rotations.
+      // Higher-dimensional subspace rotations.
       PLANE_LAYOUT.allPlanes.forEach((plane) => {
         if (plane.i < dimensionCap && plane.j < dimensionCap) {
           rotatePlane(vec, plane.i, plane.j, angles[plane.key] ?? 0)
@@ -283,15 +280,15 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
       }
 
       // 4D -> 3D perspective (compress along W axis).
-      const denomW = clamp(DIST_4D - view4[3], 0.95, 99)
-      const perspective4 = clamp(DIST_4D / denomW, 0.62, 1.78)
+      const denomW = stabilizeDenominator(DIST_4D - view4[3])
+      const perspective4 = DIST_4D / denomW
       const x3 = view4[0] * perspective4
       const y3 = view4[1] * perspective4
       const z3 = view4[2] * perspective4
 
       // 3D -> 2D perspective (compress along Z axis).
-      const denomZ = clamp(DIST_3D - z3 * 0.44, 1.0, 99)
-      const perspective3 = clamp(DIST_3D / denomZ, 0.62, 1.78)
+      const denomZ = stabilizeDenominator(DIST_3D - z3 * 0.44)
+      const perspective3 = DIST_3D / denomZ
       const x = x3
       const y = y3
       const z = z3
@@ -301,7 +298,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
         xRaw: x * perspective3,
         yRaw: y * perspective3,
         depth: z,
-        chroma: finiteOrZero(clamp(chroma * 0.7 + view4[3] * 0.3, -1.8, 1.8)),
+        chroma: finiteOrZero(chroma * 0.7 + view4[3] * 0.3),
         label: p.label,
       }
     })
@@ -464,7 +461,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
     const dy = event.clientY - dragStart.current.y
 
     setRotXY(dragStart.current.rxy + dx * 0.006)
-    setRotXZ(clamp(dragStart.current.rxz + dy * 0.006, -1.35, 1.35))
+    setRotXZ(dragStart.current.rxz + dy * 0.006)
   }
 
   function onPointerUp() {
@@ -784,7 +781,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
 
       <div className="metric16d-panel">
         <div className="metric16d-head">
-          <span className="metric4d-label">16D constrained rotations</span>
+          <span className="metric4d-label">16D rotations</span>
           <span className="metric16d-note">Logical complete set: X/Y/Z anchors to latent axes + latent chain couplings</span>
         </div>
 
