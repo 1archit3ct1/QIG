@@ -10,7 +10,7 @@ import {
   YAxis,
 } from 'recharts'
 import { parseSimulationOutput, type SimulationId } from './outputParser'
-import MetricSpaceView, { type MetricPoint3D } from './MetricSpaceView'
+import MetricSpaceView, { type MetricPoint4D } from './MetricSpaceView'
 import './App.css'
 
 type UiTheme = 'runway-tech' | 'utility-street' | 'cyber-minimal' | 'solar-lab' | 'deep-space'
@@ -457,13 +457,16 @@ function App() {
     )
   }
 
-  const metricPoints = useMemo<MetricPoint3D[]>(() => {
+  const metricPoints = useMemo<MetricPoint4D[]>(() => {
     if (!parsed) {
       return []
     }
 
-    const fromCharts: MetricPoint3D[] = []
+    const fromCharts: MetricPoint4D[] = []
     parsed.charts.slice(0, 2).forEach((chart, chartIndex) => {
+      // w encodes the observable-series axis: chart 0 → w=−1, chart 1 → w=+1
+      // This is the 4th independent coordinate — which physical observable is plotted.
+      const wSeries = chartIndex === 0 ? -1 : 1
       chart.points.slice(0, 42).forEach((point, pointIndex) => {
         const normalizedX = chart.points.length > 1 ? pointIndex / (chart.points.length - 1) : 0
         const normalizedY = Number.isFinite(point.y) ? point.y : 0
@@ -475,19 +478,24 @@ function App() {
           x: normalizedX * 2 - 1,
           y: yScaled,
           z: zWave,
+          w: wSeries,
           label: `${chart.title} #${pointIndex}`,
         })
       })
     })
 
-    const fromCards: MetricPoint3D[] = parsed.cards.slice(0, 18).map((card, index) => {
+    const totalCards = Math.min(18, parsed.cards.length)
+    const fromCards: MetricPoint4D[] = parsed.cards.slice(0, totalCards).map((card, index) => {
       const numeric = Number.parseFloat(card.value.replace(/[^0-9.-]/g, ''))
       const base = Number.isFinite(numeric) ? numeric : index + 1
+      // w encodes the measurement-phase axis: maps card index linearly to [−1, +1]
+      const wPhase = totalCards > 1 ? (index / (totalCards - 1)) * 2 - 1 : 0
       return {
         id: `card-${index}`,
         x: Math.sin(index * 0.68),
         y: Math.cos(index * 0.52) * 0.78,
         z: Math.tanh(base / 12) * (index % 2 === 0 ? 1 : -1),
+        w: wPhase,
         label: card.label,
       }
     })
