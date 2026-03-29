@@ -56,7 +56,8 @@ def demo_complexity():
             print(f"  {rev_sym} Gate {name:10s} qubits={qubits}: "
                   f"C={tracker.total_complexity:.2f}, "
                   f"dC/dt={check['dC/dt']:.3f}, "
-                  f"Lloyd={check['fraction']:.0%}{landauer}")
+                  f"Lloyd={check['fraction']:.1%}, "
+                  f"V={tracker.bulk_volume():.2f}{landauer}")
 
     print()
     print(tracker.summary())

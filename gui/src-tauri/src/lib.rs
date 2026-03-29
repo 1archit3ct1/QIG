@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::thread;
+use tauri::Emitter;
 
 #[derive(Serialize)]
 struct SimulationOutput {
@@ -11,6 +14,12 @@ struct SimulationOutput {
   success: bool,
   stdout: String,
   stderr: String,
+}
+
+#[derive(Clone, Serialize)]
+struct SimulationStreamEvent {
+  stream: String,
+  chunk: String,
 }
 
 #[derive(Deserialize)]
@@ -88,6 +97,7 @@ fn run_linux(
   script: &str,
   root: &Path,
   parameters: &Option<SimulationParameters>,
+  app: &tauri::AppHandle,
 ) -> Result<(String, String, i32, String), String> {
   let root_linux = to_wsl_path(root);
   let root_escaped = shell_escape_single_quoted(&root_linux);
@@ -103,27 +113,23 @@ fn run_linux(
     format!("{env_exports} && ")
   };
   let cmd = format!(
-    "{env_prefix}cd '{root_escaped}' && source .venv-linux/bin/activate && python3 '{script_escaped}'"
+    "{env_prefix}export PYTHONIOENCODING='utf-8' && cd '{root_escaped}' && source .venv-linux/bin/activate && python3 '{script_escaped}'"
   );
 
-  let output = Command::new("wsl")
-    .args(["-e", "bash", "-lc", &cmd])
-    .output()
+  let mut process = Command::new("wsl");
+  process.args(["-e", "bash", "-lc", &cmd]);
+
+  let (stdout, stderr, code) = run_and_stream(process, app)
     .map_err(|e| format!("failed to run WSL command: {e}"))?;
 
-  let code = output.status.code().unwrap_or(-1);
-  Ok((
-    String::from_utf8_lossy(&output.stdout).to_string(),
-    String::from_utf8_lossy(&output.stderr).to_string(),
-    code,
-    format!("wsl -e bash -lc {cmd}"),
-  ))
+  Ok((stdout, stderr, code, format!("wsl -e bash -lc {cmd}")))
 }
 
 fn run_native(
   script: &str,
   root: &Path,
   parameters: &Option<SimulationParameters>,
+  app: &tauri::AppHandle,
 ) -> Result<(String, String, i32, String), String> {
   let venv_python = root.join(".venv").join("Scripts").join("python.exe");
   let script_path = root.join(script);
@@ -145,18 +151,73 @@ fn run_native(
   for (key, value) in env_pairs {
     cmd.env(key, value);
   }
+  cmd.env("PYTHONIOENCODING", "utf-8");
 
-  let output = cmd
-    .output()
+  let (stdout, stderr, code) = run_and_stream(cmd, app)
     .map_err(|e| format!("failed to run native python command: {e}"))?;
 
-  let code = output.status.code().unwrap_or(-1);
-  Ok((
-    String::from_utf8_lossy(&output.stdout).to_string(),
-    String::from_utf8_lossy(&output.stderr).to_string(),
-    code,
-    cmd_display,
-  ))
+  Ok((stdout, stderr, code, cmd_display))
+}
+
+fn stream_pipe<R: std::io::Read + Send + 'static>(
+  reader: R,
+  stream_name: &'static str,
+  app: tauri::AppHandle,
+) -> thread::JoinHandle<Result<String, String>> {
+  thread::spawn(move || {
+    let mut collected = String::new();
+    let buf_reader = BufReader::new(reader);
+
+    for line_result in buf_reader.lines() {
+      let line = line_result.map_err(|e| format!("failed reading {stream_name}: {e}"))?;
+      let chunk = format!("{line}\n");
+      collected.push_str(&chunk);
+      let _ = app.emit(
+        "simulation-output",
+        SimulationStreamEvent {
+          stream: stream_name.to_string(),
+          chunk,
+        },
+      );
+    }
+
+    Ok(collected)
+  })
+}
+
+fn run_and_stream(
+  mut command: Command,
+  app: &tauri::AppHandle,
+) -> Result<(String, String, i32), String> {
+  command.stdout(Stdio::piped()).stderr(Stdio::piped());
+  let mut child = command
+    .spawn()
+    .map_err(|e| format!("failed to spawn process: {e}"))?;
+
+  let stdout = child
+    .stdout
+    .take()
+    .ok_or_else(|| "stdout pipe not available".to_string())?;
+  let stderr = child
+    .stderr
+    .take()
+    .ok_or_else(|| "stderr pipe not available".to_string())?;
+
+  let stdout_handle = stream_pipe(stdout, "stdout", app.clone());
+  let stderr_handle = stream_pipe(stderr, "stderr", app.clone());
+
+  let status = child
+    .wait()
+    .map_err(|e| format!("failed waiting for process: {e}"))?;
+
+  let stdout_text = stdout_handle
+    .join()
+    .map_err(|_| "stdout streaming thread panicked".to_string())??;
+  let stderr_text = stderr_handle
+    .join()
+    .map_err(|_| "stderr streaming thread panicked".to_string())??;
+
+  Ok((stdout_text, stderr_text, status.code().unwrap_or(-1)))
 }
 
 #[tauri::command]
@@ -169,16 +230,17 @@ fn run_simulation(
   simulation: String,
   prefer_linux: bool,
   parameters: Option<SimulationParameters>,
+  app: tauri::AppHandle,
 ) -> Result<SimulationOutput, String> {
   let script = simulation_script(&simulation)
     .ok_or_else(|| format!("unknown simulation '{simulation}'"))?;
   let root = repo_root();
 
   let run_result = if prefer_linux {
-    match run_linux(script, &root, &parameters) {
+    match run_linux(script, &root, &parameters, &app) {
       Ok(result) => Ok(result),
       Err(linux_err) => {
-        let native = run_native(script, &root, &parameters)?;
+        let native = run_native(script, &root, &parameters, &app)?;
         let combined_stderr = format!(
           "Linux run failed, fell back to native Python: {linux_err}\n\n{}",
           native.1
@@ -187,7 +249,7 @@ fn run_simulation(
       }
     }
   } else {
-    run_native(script, &root, &parameters)
+    run_native(script, &root, &parameters, &app)
   }?;
 
   Ok(SimulationOutput {

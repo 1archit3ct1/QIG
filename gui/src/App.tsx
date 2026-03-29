@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import {
   CartesianGrid,
   Line,
@@ -9,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { parseSimulationOutput, type MetricPoint, type SimulationId } from './outputParser'
+import { parseComplexityMetrics, parseSimulationOutput, type ComplexityMetrics, type SimulationId } from './outputParser'
 import MetricSpaceView, { type MetricPoint16D } from './MetricSpaceView'
 import './App.css'
 
@@ -20,16 +21,6 @@ type TimelineStep = {
   id: number
   label: string
   state: TimelineState
-}
-
-type DivergenceSample = {
-  t: number
-  c4: number
-  c8: number
-  c16: number
-  d1: number
-  d2: number
-  ratio: number
 }
 
 type SimulationParameters = {
@@ -62,7 +53,10 @@ type SimulationResult = {
   stderr: string
 }
 
-const DIVERGENCE_TIMESTEP_MAX = 1000000
+type SimulationStreamEvent = {
+  stream: 'stdout' | 'stderr'
+  chunk: string
+}
 
 const SIMULATIONS: Array<{ id: SimulationId; label: string; detail: string }> = [
   {
@@ -259,88 +253,6 @@ function deriveTimelineFromResult(
   }))
 }
 
-function finiteSeriesValue(value: number, fallback: number): number {
-  return Number.isFinite(value) ? value : fallback
-}
-
-function stabilizeMetricDenominator(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 1e-6
-  }
-  if (Math.abs(value) < 1e-6) {
-    return value < 0 ? -1e-6 : 1e-6
-  }
-  return value
-}
-
-function buildRawExpansionVector16(
-  points: MetricPoint[],
-  index: number,
-  cumulativeArea: number,
-  cumulativeAbsDelta: number,
-  cumulativeSum: number,
-): number[] {
-  const point = points[index]
-  const prev = index > 0 ? points[index - 1] : point
-  const next = index < points.length - 1 ? points[index + 1] : point
-
-  const rawT = finiteSeriesValue(point.x, index)
-  const rawY = finiteSeriesValue(point.y, 0)
-  const prevT = finiteSeriesValue(prev.x, index - 1)
-  const prevY = finiteSeriesValue(prev.y, rawY)
-  const nextT = finiteSeriesValue(next.x, index + 1)
-  const nextY = finiteSeriesValue(next.y, rawY)
-
-  const dtPrev = index > 0 ? Math.max(Math.abs(rawT - prevT), 1e-6) : 1
-  const dtNext = index < points.length - 1 ? Math.max(Math.abs(nextT - rawT), 1e-6) : dtPrev
-  const spanT = index > 0 && index < points.length - 1
-    ? Math.max(Math.abs(nextT - prevT), 1e-6)
-    : Math.max(dtPrev + dtNext, 1e-6)
-
-  const slopePrev = index > 0 ? (rawY - prevY) / dtPrev : 0
-  const slopeNext = index < points.length - 1 ? (nextY - rawY) / dtNext : slopePrev
-  const slope = index > 0 && index < points.length - 1
-    ? (nextY - prevY) / spanT
-    : (index > 0 ? slopePrev : slopeNext)
-  const curvature = index > 0 && index < points.length - 1
-    ? (slopeNext - slopePrev) / Math.max(spanT * 0.5, 1e-6)
-    : 0
-
-  const runningMean = cumulativeSum / (index + 1)
-  const localSpan = nextY - prevY
-  const centeredValue = rawY - runningMean
-  const slopeEnergy = slope * rawY
-  const curvatureLift = curvature * rawT
-
-  return [
-    rawT,
-    rawY,
-    slope,
-    cumulativeArea,
-    runningMean,
-    Math.abs(slope),
-    curvature,
-    rawT * rawY,
-    rawT * rawT,
-    rawY * rawY,
-    cumulativeAbsDelta,
-    centeredValue,
-    slopeEnergy,
-    curvatureLift,
-    localSpan,
-    (rawY - prevY) * (nextY - rawY),
-  ]
-}
-
-function normPrefix(values: number[], n: number): number {
-  let sum = 0
-  for (let i = 0; i < n; i += 1) {
-    const v = values[i] ?? 0
-    sum += v * v
-  }
-  return Math.sqrt(sum)
-}
-
 function analyzeReliability(result: SimulationResult | null): {
   issues: Array<{ title: string; guidance: string[] }>
   envSummary: Array<{ label: string; value: string }>
@@ -433,10 +345,10 @@ function App() {
   })
   const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>(() => buildTimelineSteps('all'))
   const [presentationMode, setPresentationMode] = useState(false)
-  const [divergenceStep, setDivergenceStep] = useState(0)
   const [exportStatus, setExportStatus] = useState<ExportStatus | null>(null)
 
   const timelineTicker = useRef<ReturnType<typeof setInterval> | null>(null)
+  const streamUnlisten = useRef<UnlistenFn | null>(null)
 
   const selectedItem = useMemo(
     () => SIMULATIONS.find((s) => s.id === selected),
@@ -454,6 +366,24 @@ function App() {
     }
     return parseSimulationOutput(result.simulation, result.stdout)
   }, [result])
+
+  const complexityMetrics = useMemo<ComplexityMetrics | null>(() => {
+    if (!result) {
+      return null
+    }
+    const parsedMetrics = parseComplexityMetrics(result.stdout)
+    if (parsedMetrics) {
+      return parsedMetrics
+    }
+    return isRunning
+      ? {
+          totalComplexity: 0,
+          dcdt: 0,
+          lloydFraction: 0,
+          bulkVolume: 0,
+        }
+      : null
+  }, [isRunning, result])
 
   const baselineParsed = useMemo(() => {
     if (!baselineResult) {
@@ -678,128 +608,6 @@ function App() {
     return [...fromCharts, ...fromCards].slice(0, 84)
   }, [parsed])
 
-  const divergenceSeries = useMemo<DivergenceSample[]>(() => {
-    if (!parsed) {
-      return []
-    }
-
-    const complexityChart = parsed.charts.find((chart) =>
-      chart.key.toLowerCase().includes('complexity') || chart.title.toLowerCase().includes('complexity'),
-    )
-
-    if (!complexityChart || complexityChart.points.length === 0) {
-      return []
-    }
-
-    let cumulativeArea = 0
-    let cumulativeAbsDelta = 0
-    let cumulativeSum = 0
-
-    return complexityChart.points.map((point, index, arr) => {
-      const rawT = finiteSeriesValue(point.x, index)
-      const rawY = finiteSeriesValue(point.y, 0)
-      const prevPoint = index > 0 ? arr[index - 1] : point
-      const prevT = finiteSeriesValue(prevPoint.x, index - 1)
-      const prevY = finiteSeriesValue(prevPoint.y, rawY)
-
-      if (index > 0) {
-        const dt = Math.max(Math.abs(rawT - prevT), 1e-6)
-        cumulativeArea += ((prevY + rawY) * 0.5) * dt
-        cumulativeAbsDelta += Math.abs(rawY - prevY)
-      }
-
-      cumulativeSum += rawY
-
-      const vec16 = buildRawExpansionVector16(
-        complexityChart.points,
-        index,
-        cumulativeArea,
-        cumulativeAbsDelta,
-        cumulativeSum,
-      )
-      const c4 = normPrefix(vec16, 4)
-      const c8 = normPrefix(vec16, 8)
-      const c16 = normPrefix(vec16, 16)
-      const d1 = c8 - c4
-      const d2 = c16 - c8
-      const ratio = d1 / stabilizeMetricDenominator(d2)
-      const scaledT = arr.length > 1
-        ? (index / (arr.length - 1)) * DIVERGENCE_TIMESTEP_MAX
-        : 0
-
-      return {
-        t: scaledT,
-        c4,
-        c8,
-        c16,
-        d1,
-        d2,
-        ratio,
-      }
-    })
-  }, [parsed])
-
-  const meanRatio = useMemo(() => {
-    if (divergenceSeries.length === 0) {
-      return NaN
-    }
-    const total = divergenceSeries.reduce((sum, sample) => sum + sample.ratio, 0)
-    return total / divergenceSeries.length
-  }, [divergenceSeries])
-
-  const currentDivergence = useMemo(() => {
-    if (divergenceSeries.length === 0) {
-      return null
-    }
-    const clampedStep = Math.min(Math.max(divergenceStep, 0), DIVERGENCE_TIMESTEP_MAX)
-    const idx = divergenceSeries.length === 1
-      ? 0
-      : Math.round((clampedStep / DIVERGENCE_TIMESTEP_MAX) * (divergenceSeries.length - 1))
-    return divergenceSeries[idx]
-  }, [divergenceSeries, divergenceStep])
-
-  const ratioSparklinePath = useMemo(() => {
-    if (divergenceSeries.length < 2) {
-      return ''
-    }
-
-    const width = 540
-    const height = 88
-    const pad = 8
-
-    const ratios = divergenceSeries.map((sample) => sample.ratio)
-    const finiteRatios = ratios.filter((v) => Number.isFinite(v))
-    if (finiteRatios.length === 0) {
-      return ''
-    }
-
-    const min = Math.min(...finiteRatios)
-    const max = Math.max(...finiteRatios)
-    const span = Math.max(max - min, 1e-9)
-
-    let path = ''
-    for (let i = 0; i < ratios.length; i += 1) {
-      const value = ratios[i]
-      if (!Number.isFinite(value)) {
-        continue
-      }
-
-      const x = pad + (i / (ratios.length - 1)) * (width - pad * 2)
-      const yNorm = (value - min) / span
-      const y = height - pad - yNorm * (height - pad * 2)
-      path += path === '' ? `M ${x} ${y}` : ` L ${x} ${y}`
-    }
-    return path
-  }, [divergenceSeries])
-
-  useEffect(() => {
-    if (divergenceSeries.length === 0) {
-      setDivergenceStep(0)
-      return
-    }
-    setDivergenceStep(DIVERGENCE_TIMESTEP_MAX)
-  }, [divergenceSeries])
-
   const reliabilityData = useMemo(() => analyzeReliability(result), [result])
 
   function applyPreset(preset: ScenarioPreset) {
@@ -818,6 +626,10 @@ function App() {
       if (timelineTicker.current) {
         clearInterval(timelineTicker.current)
       }
+      if (streamUnlisten.current) {
+        streamUnlisten.current()
+        streamUnlisten.current = null
+      }
     }
   }, [])
 
@@ -825,6 +637,10 @@ function App() {
     if (timelineTicker.current) {
       clearInterval(timelineTicker.current)
       timelineTicker.current = null
+    }
+    if (streamUnlisten.current) {
+      streamUnlisten.current()
+      streamUnlisten.current = null
     }
 
     const baseSteps = buildTimelineSteps(selected)
@@ -854,8 +670,28 @@ function App() {
     setIsRunning(true)
     setErrorText('')
     setExportStatus(null)
+    setResult({
+      simulation: selected,
+      command: '',
+      exit_code: 0,
+      success: false,
+      stdout: '',
+      stderr: '',
+    })
 
     try {
+      streamUnlisten.current = await listen<SimulationStreamEvent>('simulation-output', (event) => {
+        setResult((prev) => {
+          if (!prev || prev.simulation !== selected) {
+            return prev
+          }
+          if (event.payload.stream === 'stdout') {
+            return { ...prev, stdout: prev.stdout + event.payload.chunk }
+          }
+          return { ...prev, stderr: prev.stderr + event.payload.chunk }
+        })
+      })
+
       const data = await invoke<SimulationResult>('run_simulation', {
         simulation: selected,
         preferLinux,
@@ -865,8 +701,13 @@ function App() {
       setTimelineSteps((current) => deriveTimelineFromResult(selected, data.stdout, data.success, current))
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : String(err))
+      setResult(null)
       setTimelineSteps((current) => deriveTimelineFromResult(selected, '', false, current))
     } finally {
+      if (streamUnlisten.current) {
+        streamUnlisten.current()
+        streamUnlisten.current = null
+      }
       if (timelineTicker.current) {
         clearInterval(timelineTicker.current)
         timelineTicker.current = null
@@ -1208,91 +1049,32 @@ function App() {
       <section className="panel divergence-panel">
         <div className="label-row">
           <h2>Dimensional Divergence Analyzer</h2>
-          <span className="hint">Raw divergence metrics from C4, C8, C16 trajectories</span>
+          <span className="hint">Real complexity metrics streamed from the Python backend</span>
         </div>
 
-        {divergenceSeries.length === 0 && (
-          <p className="hint">Run a simulation with complexity trajectory output to populate divergence analytics.</p>
+        {!complexityMetrics && (
+          <p className="hint">Run a complexity simulation to populate total complexity, dC/dt, Lloyd efficiency, and bulk volume.</p>
         )}
 
-        {divergenceSeries.length > 0 && currentDivergence && (
-          <>
-            <div className="divergence-controls">
-              <label htmlFor="divergence-step">Timestep t</label>
-              <input
-                id="divergence-step"
-                type="range"
-                min={0}
-                max={DIVERGENCE_TIMESTEP_MAX}
-                step={1}
-                value={Math.min(Math.max(divergenceStep, 0), DIVERGENCE_TIMESTEP_MAX)}
-                onChange={(e) => setDivergenceStep(Number.parseInt(e.target.value, 10) || 0)}
-              />
-              <span>
-                t = {currentDivergence.t.toFixed(2)}
-              </span>
-            </div>
-
-            <div className="divergence-main-grid">
-              <article className="mean-ratio-card">
-                <h3>Mean Ratio</h3>
-                <p>{Number.isFinite(meanRatio) ? meanRatio.toFixed(6) : String(meanRatio)}</p>
-              </article>
-
-              <article className="ratio-card">
-                <h3>Current Ratio(t)</h3>
-                <p>{Number.isFinite(currentDivergence.ratio) ? currentDivergence.ratio.toFixed(6) : String(currentDivergence.ratio)}</p>
-              </article>
-
-              <article className="d-card">
-                <h3>D1(t) = C8 - C4</h3>
-                <p>{currentDivergence.d1.toFixed(6)}</p>
-              </article>
-
-              <article className="d-card">
-                <h3>D2(t) = C16 - C8</h3>
-                <p>{currentDivergence.d2.toFixed(6)}</p>
-              </article>
-            </div>
-
-            <div className="divergence-values-grid">
-              <article>
-                <h3>C4(t)</h3>
-                <p>{currentDivergence.c4.toFixed(6)}</p>
-              </article>
-              <article>
-                <h3>C8(t)</h3>
-                <p>{currentDivergence.c8.toFixed(6)}</p>
-              </article>
-              <article>
-                <h3>C16(t)</h3>
-                <p>{currentDivergence.c16.toFixed(6)}</p>
-              </article>
-              <article>
-                <h3>C8 - C4</h3>
-                <p>{(currentDivergence.c8 - currentDivergence.c4).toFixed(6)}</p>
-              </article>
-              <article>
-                <h3>C16 - C8</h3>
-                <p>{(currentDivergence.c16 - currentDivergence.c8).toFixed(6)}</p>
-              </article>
-              <article>
-                <h3>C16 - C4</h3>
-                <p>{(currentDivergence.c16 - currentDivergence.c4).toFixed(6)}</p>
-              </article>
-            </div>
-
-            <article className="sparkline-card">
-              <div className="label-row compact">
-                <h3>Ratio(t) Sparkline</h3>
-                <span className="hint">Raw unnormalized series</span>
-              </div>
-              <svg className="ratio-sparkline" viewBox="0 0 540 88" role="img" aria-label="Ratio over time sparkline">
-                <rect x={0} y={0} width={540} height={88} rx={10} ry={10} fill="transparent" />
-                <path d={ratioSparklinePath} fill="none" stroke="var(--accent)" strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+        {complexityMetrics && (
+          <div className="divergence-values-grid">
+            <article>
+              <h3>Total Complexity C(t)</h3>
+              <p>{complexityMetrics.totalComplexity?.toFixed(6) ?? '—'}</p>
             </article>
-          </>
+            <article>
+              <h3>Complexity Growth dC/dt</h3>
+              <p>{complexityMetrics.dcdt?.toFixed(6) ?? '—'}</p>
+            </article>
+            <article>
+              <h3>Lloyd Fraction</h3>
+              <p>{complexityMetrics.lloydFraction !== null ? `${(complexityMetrics.lloydFraction * 100).toFixed(1)}%` : '—'}</p>
+            </article>
+            <article>
+              <h3>Bulk Volume = C·G_N·l_AdS</h3>
+              <p>{complexityMetrics.bulkVolume?.toFixed(6) ?? '—'}</p>
+            </article>
+          </div>
         )}
       </section>
 

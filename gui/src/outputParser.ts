@@ -23,6 +23,13 @@ export type ParsedSimulationOutput = {
   charts: MetricChart[]
 }
 
+export type ComplexityMetrics = {
+  totalComplexity: number | null
+  dcdt: number | null
+  lloydFraction: number | null
+  bulkVolume: number | null
+}
+
 function extractFloat(pattern: RegExp, text: string): number | null {
   const match = text.match(pattern)
   if (!match) {
@@ -30,6 +37,28 @@ function extractFloat(pattern: RegExp, text: string): number | null {
   }
   const value = Number.parseFloat(match[1])
   return Number.isFinite(value) ? value : null
+}
+
+function extractLastFloat(pattern: RegExp, text: string): number | null {
+  let last: number | null = null
+  for (const match of text.matchAll(pattern)) {
+    const value = Number.parseFloat(match[1])
+    if (Number.isFinite(value)) {
+      last = value
+    }
+  }
+  return last
+}
+
+function extractLastPercent(pattern: RegExp, text: string): number | null {
+  let last: number | null = null
+  for (const match of text.matchAll(pattern)) {
+    const value = Number.parseFloat(match[1])
+    if (Number.isFinite(value)) {
+      last = value / 100
+    }
+  }
+  return last
 }
 
 function parsePageCurve(stdout: string): MetricPoint[] {
@@ -66,6 +95,34 @@ function parseComplexityTrajectory(stdout: string): MetricPoint[] {
   }
 
   return points
+}
+
+export function parseComplexityMetrics(stdout: string): ComplexityMetrics | null {
+  const totalComplexity = extractLastFloat(/Total complexity C\(t\):\s*([0-9]+\.?[0-9]*)/g, stdout)
+  const dcdt = extractLastFloat(/Complexity growth rate dC\/dt:\s*([0-9]+\.?[0-9]*)/g, stdout)
+  const lloydFraction = extractLastPercent(/Efficiency \(Lloyd fraction\):\s*([0-9]+\.?[0-9]*)%/g, stdout)
+  const bulkVolume = extractLastFloat(/Bulk volume V = C\*G_N\*l:\s*([0-9]+\.?[0-9]*)/g, stdout)
+
+  const gateMatches = Array.from(
+    stdout.matchAll(/C=([0-9]+\.?[0-9]*),\s*dC\/dt=([0-9]+\.?[0-9]*),\s*Lloyd=([0-9]+\.?[0-9]*)%(?:,\s*V=([0-9]+\.?[0-9]*))?/g),
+  )
+  const latestGate = gateMatches.length > 0 ? gateMatches[gateMatches.length - 1] : null
+
+  const fallbackTotalComplexity = latestGate ? Number.parseFloat(latestGate[1]) : null
+  const fallbackDcdt = latestGate ? Number.parseFloat(latestGate[2]) : null
+  const fallbackLloydFraction = latestGate ? Number.parseFloat(latestGate[3]) / 100 : null
+  const fallbackBulkVolume = latestGate?.[4] ? Number.parseFloat(latestGate[4]) : null
+
+  const metrics: ComplexityMetrics = {
+    totalComplexity: totalComplexity ?? fallbackTotalComplexity,
+    dcdt: dcdt ?? fallbackDcdt,
+    lloydFraction: lloydFraction ?? fallbackLloydFraction,
+    bulkVolume: bulkVolume ?? fallbackBulkVolume,
+  }
+
+  return Object.values(metrics).some((value) => value !== null)
+    ? metrics
+    : null
 }
 
 export function parseSimulationOutput(
