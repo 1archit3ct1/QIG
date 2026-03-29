@@ -88,6 +88,10 @@ function chromaColor(value: number): string {
   return `rgb(${r},${g},${b})`
 }
 
+function finiteOrZero(value: number): number {
+  return Number.isFinite(value) ? value : 0
+}
+
 export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
   const [zoom, setZoom] = useState(1.25)
 
@@ -118,13 +122,13 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
 
   const projected = useMemo<ProjectedPoint[]>(() => {
     const raw = points.map((p) => {
-      const vec = p.v.slice() as number[]
+      const vec = p.v.map((value) => finiteOrZero(value)) as number[]
       rotations.forEach((r) => rotatePlane(vec, r.i, r.j, r.angle))
 
       const { xyz, chroma } = project8Dto3D(vec as Vec8)
-      const x = xyz[0]
-      const y = xyz[1]
-      const z = xyz[2]
+      const x = finiteOrZero(xyz[0])
+      const y = finiteOrZero(xyz[1])
+      const z = finiteOrZero(xyz[2])
 
       const denom = clamp(DIST_2D - z * 0.45, 0.9, 99)
       const perspective = clamp(DIST_2D / denom, 0.55, 1.95)
@@ -134,15 +138,34 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
         xRaw: x * perspective,
         yRaw: y * perspective,
         depth: z,
-        chroma,
+        chroma: finiteOrZero(chroma),
         label: p.label,
       }
     })
 
-    const minX = Math.min(...raw.map((p) => p.xRaw), -1)
-    const maxX = Math.max(...raw.map((p) => p.xRaw), 1)
-    const minY = Math.min(...raw.map((p) => p.yRaw), -1)
-    const maxY = Math.max(...raw.map((p) => p.yRaw), 1)
+    const finiteRaw = raw.filter(
+      (p) => Number.isFinite(p.xRaw) && Number.isFinite(p.yRaw) && Number.isFinite(p.depth) && Number.isFinite(p.chroma),
+    )
+
+    // Safety fallback: never leave the canvas empty if projection collapses.
+    const stableRaw = finiteRaw.length > 0
+      ? finiteRaw
+      : points.slice(0, 28).map((p, index) => {
+          const angle = (index / Math.max(points.length, 1)) * Math.PI * 2
+          return {
+            id: `${p.id}-fallback`,
+            xRaw: Math.cos(angle) * 0.65,
+            yRaw: Math.sin(angle) * 0.45,
+            depth: 0,
+            chroma: 0,
+            label: p.label,
+          }
+        })
+
+    const minX = Math.min(...stableRaw.map((p) => p.xRaw), -1)
+    const maxX = Math.max(...stableRaw.map((p) => p.xRaw), 1)
+    const minY = Math.min(...stableRaw.map((p) => p.yRaw), -1)
+    const maxY = Math.max(...stableRaw.map((p) => p.yRaw), 1)
     const spanX = Math.max(maxX - minX, 0.01)
     const spanY = Math.max(maxY - minY, 0.01)
     const fitScale = Math.min((WIDTH * FIT_MARGIN_X) / spanX, (HEIGHT * FIT_MARGIN_Y) / spanY)
@@ -150,7 +173,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
     const midX = (minX + maxX) / 2
     const midY = (minY + maxY) / 2
 
-    return raw
+    return stableRaw
       .map((p) => {
         const x2d = CENTER_X + (p.xRaw - midX) * fitScale * zoom
         const y2d = CENTER_Y + (p.yRaw - midY) * fitScale * zoom
