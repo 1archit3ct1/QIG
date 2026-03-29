@@ -52,10 +52,10 @@ const CENTER_X = WIDTH / 2
 const CENTER_Y = HEIGHT / 2
 
 /** 4D → 3D perspective projection distance (along W axis) */
-const D_W = 2.5
+const D_W = 5.8
 
 /** 3D → 2D perspective projection distance (along Z axis) */
-const D_Z = 4.0
+const D_Z = 6.2
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v
@@ -152,22 +152,22 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
 
         // 4D → 3D perspective projection along W axis
         // P₃ = P₄ · (d_w / (d_w − w′))
-        const wDenom = clamp(D_W - rw, 0.15, 99)
-        const wFactor = D_W / wDenom
+        const wDenom = clamp(D_W - rw, 0.8, 99)
+        const wFactor = clamp(D_W / wDenom, 0.45, 2.1)
         const x3 = rx * wFactor
         const y3 = ry * wFactor
         const z3 = rz * wFactor
 
         // 3D → 2D perspective projection along Z axis
         // P₂ = P₃ · (d_z / (d_z − z′))
-        const zDenom = clamp(D_Z - z3 * 0.55, 0.2, 99)
-        const zFactor = D_Z / zDenom
+        const zDenom = clamp(D_Z - z3 * 0.55, 0.9, 99)
+        const zFactor = clamp(D_Z / zDenom, 0.5, 2.0)
         const x2d = CENTER_X + x3 * scale * zFactor
         const y2d = CENTER_Y + y3 * scale * zFactor
 
         const depth = z3
         const wDepth = clamp(rw, -1.5, 1.5)
-        const opacity = clamp(0.5 + depth * 0.3, 0.18, 1.0)
+        const opacity = clamp(0.55 + depth * 0.22, 0.24, 1.0)
         const radius = clamp(3.0 + depth * 1.5 + (wFactor - 1) * 0.8, 2.2, 8.0)
 
         return { id: p.id, x2d, y2d, depth, wDepth, radius, opacity, label: p.label }
