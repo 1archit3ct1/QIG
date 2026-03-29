@@ -10,7 +10,7 @@ import {
   YAxis,
 } from 'recharts'
 import { parseSimulationOutput, type SimulationId } from './outputParser'
-import MetricSpaceView, { type MetricPoint4D } from './MetricSpaceView'
+import MetricSpaceView, { type MetricPoint8D } from './MetricSpaceView'
 import './App.css'
 
 type UiTheme = 'runway-tech' | 'utility-street' | 'cyber-minimal' | 'solar-lab' | 'deep-space'
@@ -457,45 +457,56 @@ function App() {
     )
   }
 
-  const metricPoints = useMemo<MetricPoint4D[]>(() => {
+  const metricPoints = useMemo<MetricPoint8D[]>(() => {
     if (!parsed) {
       return []
     }
 
-    const fromCharts: MetricPoint4D[] = []
+    const fromCharts: MetricPoint8D[] = []
     parsed.charts.slice(0, 2).forEach((chart, chartIndex) => {
-      // w encodes the observable-series axis: chart 0 → w=−1, chart 1 → w=+1
-      // This is the 4th independent coordinate — which physical observable is plotted.
       const wSeries = chartIndex === 0 ? -1 : 1
       chart.points.slice(0, 42).forEach((point, pointIndex) => {
         const normalizedX = chart.points.length > 1 ? pointIndex / (chart.points.length - 1) : 0
         const normalizedY = Number.isFinite(point.y) ? point.y : 0
         const yScaled = Math.tanh(normalizedY / 6)
         const zWave = Math.sin(normalizedX * Math.PI * 2 + chartIndex * 0.8) * 0.65
+        const u = Math.sin((pointIndex + 1) * 0.37 + chartIndex * 0.5)
+        const v = Math.cos((pointIndex + 1) * 0.23 - chartIndex * 0.6)
+        const s = Math.tanh(normalizedY / 8)
+        const t = Math.sin((normalizedX * 2 - 1) * Math.PI * 1.5)
 
         fromCharts.push({
           id: `chart-${chartIndex}-${pointIndex}`,
-          x: normalizedX * 2 - 1,
-          y: yScaled,
-          z: zWave,
-          w: wSeries,
+          v: [
+            normalizedX * 2 - 1,
+            yScaled,
+            zWave,
+            wSeries,
+            u,
+            v,
+            s,
+            t,
+          ],
           label: `${chart.title} #${pointIndex}`,
         })
       })
     })
 
     const totalCards = Math.min(18, parsed.cards.length)
-    const fromCards: MetricPoint4D[] = parsed.cards.slice(0, totalCards).map((card, index) => {
+    const fromCards: MetricPoint8D[] = parsed.cards.slice(0, totalCards).map((card, index) => {
       const numeric = Number.parseFloat(card.value.replace(/[^0-9.-]/g, ''))
       const base = Number.isFinite(numeric) ? numeric : index + 1
-      // w encodes the measurement-phase axis: maps card index linearly to [−1, +1]
       const wPhase = totalCards > 1 ? (index / (totalCards - 1)) * 2 - 1 : 0
+      const x = Math.sin(index * 0.68)
+      const y = Math.cos(index * 0.52) * 0.78
+      const z = Math.tanh(base / 12) * (index % 2 === 0 ? 1 : -1)
+      const u = Math.sin(base * 0.11)
+      const v = Math.cos(base * 0.07 + index * 0.2)
+      const s = Math.tanh((base - 2) / 10)
+      const t = Math.sin(index * 0.31 + base * 0.04)
       return {
         id: `card-${index}`,
-        x: Math.sin(index * 0.68),
-        y: Math.cos(index * 0.52) * 0.78,
-        z: Math.tanh(base / 12) * (index % 2 === 0 ? 1 : -1),
-        w: wPhase,
+        v: [x, y, z, wPhase, u, v, s, t],
         label: card.label,
       }
     })
