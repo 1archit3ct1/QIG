@@ -13,7 +13,7 @@ import { parseSimulationOutput, type SimulationId } from './outputParser'
 import MetricSpaceView, { type MetricPoint3D } from './MetricSpaceView'
 import './App.css'
 
-type UiTheme = 'runway-tech' | 'utility-street' | 'cyber-minimal'
+type UiTheme = 'runway-tech' | 'utility-street' | 'cyber-minimal' | 'solar-lab' | 'deep-space'
 type TimelineState = 'pending' | 'active' | 'done' | 'error'
 
 type TimelineStep = {
@@ -86,6 +86,8 @@ const THEMES: Array<{ id: UiTheme; label: string }> = [
   { id: 'runway-tech', label: 'Runway Tech' },
   { id: 'utility-street', label: 'Utility Street' },
   { id: 'cyber-minimal', label: 'Cyber Minimal' },
+  { id: 'solar-lab', label: 'Solar Lab' },
+  { id: 'deep-space', label: 'Deep Space' },
 ]
 
 const CHART_COLORS: Record<UiTheme, { grid: string; tick: string; border: string; bg: string; line: string }> = {
@@ -109,6 +111,20 @@ const CHART_COLORS: Record<UiTheme, { grid: string; tick: string; border: string
     border: '#44527c',
     bg: '#161d2f',
     line: '#35d1ff',
+  },
+  'solar-lab': {
+    grid: '#e8d0a0',
+    tick: '#8b6030',
+    border: '#dfc090',
+    bg: '#fdf5e4',
+    line: '#c47a00',
+  },
+  'deep-space': {
+    grid: '#3d2e60',
+    tick: '#c4a8f0',
+    border: '#5a3e8a',
+    bg: '#1a1030',
+    line: '#b07aff',
   },
 }
 
@@ -238,6 +254,81 @@ function deriveTimelineFromResult(
   }))
 }
 
+function analyzeReliability(result: SimulationResult | null): {
+  issues: Array<{ title: string; guidance: string[] }>
+  envSummary: Array<{ label: string; value: string }>
+} {
+  const envSummary: Array<{ label: string; value: string }> = [
+    { label: 'Simulation', value: result?.simulation ?? 'none' },
+    { label: 'Exit Code', value: result ? String(result.exit_code) : '—' },
+    { label: 'Status', value: result ? (result.success ? 'Passed' : 'Failed') : 'Not Run' },
+  ]
+
+  if (!result) {
+    return { issues: [], envSummary }
+  }
+
+  const stderr = (result.stderr ?? '').toLowerCase()
+  const stdout = (result.stdout ?? '').toLowerCase()
+  const issues: Array<{ title: string; guidance: string[] }> = []
+
+  if (stderr.includes('no such file') || stderr.includes('filenotfounderror')) {
+    issues.push({
+      title: 'Path or File Error',
+      guidance: [
+        'Verify the Python virtual environment is activated (.venv-linux or .venv).',
+        'Check that simulation script paths are correct inside the project.',
+        'If using WSL, confirm the project folder is accessible at /mnt/d/…',
+      ],
+    })
+  }
+
+  if (stderr.includes('modulenotfounderror') || stderr.includes('no module named')) {
+    issues.push({
+      title: 'Missing Python Module',
+      guidance: [
+        'Run: pip install -r requirements.txt inside your venv.',
+        'Ensure the venv is activated before launching.',
+        'On WSL: activate with source .venv-linux/bin/activate.',
+      ],
+    })
+  }
+
+  if (stderr.includes('wsl') && (stderr.includes('no such file') || stderr.includes('error'))) {
+    issues.push({
+      title: 'WSL Bridge Issue',
+      guidance: [
+        'Make sure WSL 2 is installed and a Linux distro is available.',
+        'Try disabling Prefer Linux mode to use the native Python fallback.',
+        'Verify the project path is accessible without Windows extended-path prefixes.',
+      ],
+    })
+  }
+
+  if (!result.success && issues.length === 0) {
+    issues.push({
+      title: 'Simulation Exit Failure',
+      guidance: [
+        `Process exited with code ${result.exit_code} — review stderr for details.`,
+        'Ensure all QIG modules (core, demos, compiler) are present and importable.',
+        'Try running the simulation script directly in a terminal to isolate the issue.',
+      ],
+    })
+  }
+
+  if (result.success && (stdout.includes('warning') || stdout.includes('warn'))) {
+    issues.push({
+      title: 'Non-Fatal Warnings Detected',
+      guidance: [
+        'Check stdout for warning messages that may indicate degraded accuracy.',
+        'Consider adjusting simulation parameters if results look unexpected.',
+      ],
+    })
+  }
+
+  return { issues, envSummary }
+}
+
 function App() {
   const [selected, setSelected] = useState<SimulationId>('all')
   const [selectedPresetId, setSelectedPresetId] = useState<string>(SCENARIO_PRESETS[0].id)
@@ -254,6 +345,7 @@ function App() {
     energyRate: 100,
   })
   const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>(() => buildTimelineSteps('all'))
+  const [presentationMode, setPresentationMode] = useState(false)
 
   const timelineTicker = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -403,6 +495,8 @@ function App() {
     return [...fromCharts, ...fromCards].slice(0, 84)
   }, [parsed])
 
+  const reliabilityData = useMemo(() => analyzeReliability(result), [result])
+
   function applyPreset(preset: ScenarioPreset) {
     setSelectedPresetId(preset.id)
     setSelected(preset.simulation)
@@ -476,14 +570,17 @@ function App() {
   }
 
   return (
-    <main className="layout" data-theme={theme}>
+    <main
+      className={`layout${isRunning ? ' running' : ''}${result ? ' has-result' : ''}${presentationMode ? ' presentation' : ''}`}
+      data-theme={theme}
+    >
       <header className="hero">
         <p className="eyebrow">QIG Desktop Lab</p>
         <h1>Quantum Simulation Control Panel</h1>
         <p className="subtitle">
           Run geometry, holographic, and complexity simulations from a Tauri desktop frontend.
         </p>
-        <div className="theme-switch" aria-label="Theme selector">
+        <div className="theme-switch" aria-label="Theme and view controls">
           {THEMES.map((item) => (
             <button
               key={item.id}
@@ -494,6 +591,14 @@ function App() {
               {item.label}
             </button>
           ))}
+          <button
+            type="button"
+            className={presentationMode ? 'theme-chip active' : 'theme-chip'}
+            style={{ marginLeft: 'auto' }}
+            onClick={() => setPresentationMode((v) => !v)}
+          >
+            Presentation
+          </button>
         </div>
       </header>
 
@@ -764,6 +869,9 @@ function App() {
                             strokeWidth={2}
                             dot={false}
                             activeDot={{ r: 4 }}
+                            isAnimationActive
+                            animationDuration={1100}
+                            animationEasing="ease-out"
                           />
                         </LineChart>
                       </ResponsiveContainer>
@@ -870,6 +978,61 @@ function App() {
             Export Charts CSV
           </button>
         </div>
+      </section>
+
+      <section className="panel reliability-panel">
+        <div className="label-row">
+          <h2>Reliability &amp; Diagnostics</h2>
+          <span className="hint">Environment health and guided recovery</span>
+        </div>
+
+        <div className="env-grid">
+          {reliabilityData.envSummary.map((item) => (
+            <div className="env-item" key={item.label}>
+              <h3>{item.label}</h3>
+              <p>{item.value}</p>
+            </div>
+          ))}
+          <div className="env-item">
+            <h3>Mode</h3>
+            <p>{preferLinux ? 'WSL / Linux' : 'Native'}</p>
+          </div>
+          <div className="env-item">
+            <h3>Qubits</h3>
+            <p>{parameters.qubits}</p>
+          </div>
+          <div className="env-item">
+            <h3>Curvature</h3>
+            <p>{parameters.curvature}</p>
+          </div>
+        </div>
+
+        {reliabilityData.issues.length === 0 && result?.success && (
+          <p className="hint">No issues detected. Last run completed successfully.</p>
+        )}
+        {reliabilityData.issues.length === 0 && !result && (
+          <p className="hint">Run a simulation to surface diagnostics.</p>
+        )}
+
+        {reliabilityData.issues.map((issue) => (
+          <article className="guidance-card" key={issue.title}>
+            <h3>{issue.title}</h3>
+            <ul>
+              {issue.guidance.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ul>
+          </article>
+        ))}
+
+        <button
+          type="button"
+          className="mini-button"
+          onClick={runSelectedSimulation}
+          disabled={isRunning}
+        >
+          {isRunning ? 'Running…' : 'Retry Simulation'}
+        </button>
       </section>
     </main>
   )

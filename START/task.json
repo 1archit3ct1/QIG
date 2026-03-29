@@ -164,26 +164,58 @@
 		{
 			"id": 16,
 			"title": "Expand motion system",
-			"status": "pending",
-			"details": "Introduce meaningful transitions tied to simulation state changes and results."
+			"status": "completed",
+			"details": "Introduce meaningful transitions tied to simulation state changes and results.",
+			"result": {
+				"additions": [
+					"transition on timeline-step border/shadow/bg",
+					"transition on timeline-dot colour",
+					"shimmer-slide keyframe on run-button while isRunning",
+					"running-state glow on timeline-panel",
+					"staggered fade-up on metric-card (8-step), chart-card (3-step), delta-card (8-step)",
+					"Recharts isAnimationActive + animationDuration=1100ms on Line"
+				],
+				"files": ["gui/src/App.css", "gui/src/App.tsx"]
+			}
 		},
 		{
 			"id": 17,
 			"title": "Create design system layer",
-			"status": "pending",
-			"details": "Refactor style tokens into a reusable design-system structure for consistency."
+			"status": "completed",
+			"details": "Refactor style tokens into a reusable design-system structure for consistency.",
+			"result": {
+				"file": "gui/src/design-tokens.css",
+				"tokens": ["spacing (--space-1 to --space-12)", "border-radius (--radius-sm to --radius-pill)", "shadows (--shadow-xs to --shadow-accent)", "typography (--text-2xs to --text-xl)", "font stacks (--font-sans, --font-mono)", "animation durations (--dur-instant to --dur-reveal)", "easing curves (--ease-out, --ease-in-out, --ease-spring)", "z-index scale", "layout max-width and blur"],
+				"importedFrom": "gui/src/index.css"
+			}
 		},
 		{
 			"id": 18,
 			"title": "Add advanced theme packs",
-			"status": "pending",
-			"details": "Extend theme selector with presentation-ready packs and chart-specific palettes."
+			"status": "completed",
+			"details": "Extend theme selector with presentation-ready packs and chart-specific palettes.",
+			"result": {
+				"themes_added": ["solar-lab (warm amber/copper)", "deep-space (ultra-dark violet/purple)"],
+				"chart_palettes": ["solar-lab", "deep-space"],
+				"presentation_mode": "toggle chip in hero, bumps font sizes, chart height 320px",
+				"dark_card_overrides": ["cyber-minimal", "deep-space"],
+				"files": ["gui/src/App.tsx", "gui/src/App.css"]
+			}
 		},
 		{
 			"id": 19,
 			"title": "Add reliability UX panel",
-			"status": "pending",
-			"details": "Expose environment diagnostics, recoverable errors, and guided remediation actions."
+			"status": "completed",
+			"details": "Expose environment diagnostics, recoverable errors, and guided remediation actions.",
+			"result": {
+				"panel": "Reliability & Diagnostics — bottom panel, always visible",
+				"env_grid": ["simulation", "exit code", "status", "mode", "qubits", "curvature"],
+				"error_detection": ["Path/File errors", "Missing module", "WSL bridge issues", "Generic exit failure", "Non-fatal warnings"],
+				"guided_recovery": "Per-issue guidance cards with actionable steps",
+				"retry_button": true,
+				"function": "analyzeReliability() — pure function, no new Tauri commands",
+				"files": ["gui/src/App.tsx", "gui/src/App.css"]
+			}
 		}
 	]
 }

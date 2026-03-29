@@ -180,6 +180,7 @@
   border: 1px solid var(--line);
   border-radius: 12px;
   background: color-mix(in srgb, var(--panel-strong) 85%, white 15%);
+  transition: border-color 220ms ease, box-shadow 220ms ease, background-color 240ms ease;
 }
 
 .timeline-dot {
@@ -188,6 +189,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--muted) 68%, white 32%);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--line) 25%, transparent);
+  transition: background 220ms ease, box-shadow 240ms ease, transform 200ms ease;
 }
 
 .timeline-text {
@@ -238,6 +240,37 @@
     transform: scale(1);
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-3) 0%, transparent);
   }
+}
+
+@keyframes shimmer-slide {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(260%); }
+}
+
+.layout.running .run-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.layout.running .run-button::after {
+  content: '';
+  position: absolute;
+  inset: 0 -20% 0 -20%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 45%,
+    rgba(255, 255, 255, 0.42) 50%,
+    rgba(255, 255, 255, 0.3) 55%,
+    transparent 100%
+  );
+  animation: shimmer-slide 1.5s ease-in-out infinite;
+}
+
+.layout.running .timeline-panel {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+  transition: border-color 320ms ease, box-shadow 320ms ease;
 }
 
 .sim-grid {
@@ -541,7 +574,17 @@
   border-radius: 12px;
   background: linear-gradient(145deg, #fbfdff, #f2f8ff);
   padding: 0.7rem;
+  animation: fade-up 340ms ease-out both;
 }
+
+.metric-card:nth-child(1) { animation-delay:   0ms; }
+.metric-card:nth-child(2) { animation-delay:  60ms; }
+.metric-card:nth-child(3) { animation-delay: 120ms; }
+.metric-card:nth-child(4) { animation-delay: 180ms; }
+.metric-card:nth-child(5) { animation-delay: 240ms; }
+.metric-card:nth-child(6) { animation-delay: 300ms; }
+.metric-card:nth-child(7) { animation-delay: 360ms; }
+.metric-card:nth-child(8) { animation-delay: 420ms; }
 
 .metric-card h3 {
   margin: 0 0 0.35rem;
@@ -565,7 +608,12 @@
   border-radius: 12px;
   background: linear-gradient(160deg, #ffffff, #f6f9ff);
   padding: 0.75rem;
+  animation: fade-up 400ms ease-out both;
 }
+
+.chart-card:nth-child(1) { animation-delay:   0ms; }
+.chart-card:nth-child(2) { animation-delay:  90ms; }
+.chart-card:nth-child(3) { animation-delay: 180ms; }
 
 .chart-card h3 {
   margin: 0 0 0.5rem;
@@ -656,7 +704,17 @@
   border-radius: 11px;
   background: color-mix(in srgb, var(--panel-strong) 90%, white 10%);
   padding: 0.58rem;
+  animation: fade-up 300ms ease-out both;
 }
+
+.delta-card:nth-child(1) { animation-delay:   0ms; }
+.delta-card:nth-child(2) { animation-delay:  55ms; }
+.delta-card:nth-child(3) { animation-delay: 110ms; }
+.delta-card:nth-child(4) { animation-delay: 165ms; }
+.delta-card:nth-child(5) { animation-delay: 220ms; }
+.delta-card:nth-child(6) { animation-delay: 275ms; }
+.delta-card:nth-child(7) { animation-delay: 330ms; }
+.delta-card:nth-child(8) { animation-delay: 385ms; }
 
 .delta-card h3 {
   margin: 0 0 0.25rem;
@@ -693,6 +751,156 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ─── Task 18: Solar Lab theme ─── */
+.layout[data-theme='solar-lab'] {
+  --ink: #2a1e0e;
+  --ink-soft: #5a3d1a;
+  --muted: #806040;
+  --line: #e0c89a;
+  --panel: rgba(255, 249, 238, 0.9);
+  --panel-strong: #fdf5e4;
+  --hero-start: #fff4d6;
+  --hero-mid: #ffe8b0;
+  --hero-end: #ffd88a;
+  --accent: #c47a00;
+  --accent-3: #e05c1a;
+  --ok-bg: #e8f5e2;
+  --ok-fg: #2d6228;
+  --fail-bg: #ffeadf;
+  --fail-fg: #a03018;
+}
+
+.layout[data-theme='solar-lab'] .sim-button {
+  background: linear-gradient(130deg, #fff8e8, #fff0d0);
+}
+
+.layout[data-theme='solar-lab'] .sim-button.active {
+  background: linear-gradient(145deg, #fff3cc, #ffeaa8 58%, #ffe0c0);
+}
+
+/* ─── Task 18: Deep Space theme ─── */
+.layout[data-theme='deep-space'] {
+  --ink: #e8d9ff;
+  --ink-soft: #c4a8f0;
+  --muted: #927cc0;
+  --line: #3d2e60;
+  --panel: rgba(18, 12, 35, 0.88);
+  --panel-strong: #1a1030;
+  --hero-start: #1c1040;
+  --hero-mid: #240e50;
+  --hero-end: #0e1628;
+  --accent: #b07aff;
+  --accent-3: #ff6bc8;
+  --ok-bg: #152838;
+  --ok-fg: #7af0d4;
+  --fail-bg: #38102a;
+  --fail-fg: #ff8ec8;
+}
+
+.layout[data-theme='deep-space'] .sim-button {
+  background: linear-gradient(130deg, #1c1040, #160c36);
+}
+
+.layout[data-theme='deep-space'] .sim-button.active {
+  background: linear-gradient(145deg, #220f58, #1a0d44 58%, #2e1060);
+}
+
+.layout[data-theme='deep-space'] .log-grid pre {
+  color: #e8d9ff;
+}
+
+/* dark-theme card overrides */
+.layout[data-theme='cyber-minimal'] .metric-card,
+.layout[data-theme='deep-space'] .metric-card {
+  background: color-mix(in srgb, var(--panel-strong) 94%, var(--accent) 6%);
+}
+
+.layout[data-theme='cyber-minimal'] .chart-card,
+.layout[data-theme='deep-space'] .chart-card {
+  background: color-mix(in srgb, var(--panel-strong) 96%, var(--accent-3) 4%);
+}
+
+/* ─── Task 18: Presentation mode ─── */
+.layout.presentation h1 {
+  font-size: clamp(2.1rem, 3.6vw, 3.4rem);
+}
+
+.layout.presentation h2 {
+  font-size: 1.2rem;
+}
+
+.layout.presentation .hint {
+  font-size: 1rem;
+}
+
+.layout.presentation .timeline-text {
+  font-size: 1rem;
+}
+
+.layout.presentation .metric-card p {
+  font-size: 1.25rem;
+}
+
+.layout.presentation .chart-wrap {
+  height: 320px;
+}
+
+/* ─── Task 19: Reliability & Diagnostics panel ─── */
+.reliability-panel {
+  animation: fade-up 900ms ease-out;
+}
+
+.env-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.8rem;
+}
+
+.env-item {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--panel-strong) 90%, white 10%);
+  padding: 0.55rem 0.65rem;
+}
+
+.env-item h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.env-item p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--ink);
+  font-family: var(--mono);
+}
+
+.guidance-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel-strong) 92%, white 8%);
+  padding: 0.65rem 0.8rem;
+  margin-bottom: 0.7rem;
+  animation: fade-up 360ms ease-out both;
+}
+
+.guidance-card h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.guidance-card ul {
+  margin: 0.2rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  display: grid;
+  gap: 0.2rem;
 }
 
 @media (max-width: 900px) {
