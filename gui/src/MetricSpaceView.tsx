@@ -105,6 +105,23 @@ function buildPlaneDefs(): { anchorPlanes: PlaneDef[]; chainPlanes: PlaneDef[]; 
 
 const PLANE_LAYOUT = buildPlaneDefs()
 
+function build8DPlaneDefs(): PlaneDef[] {
+  const planes: PlaneDef[] = []
+  for (let i = 0; i < 8; i += 1) {
+    for (let j = i + 1; j < 8; j += 1) {
+      planes.push({
+        key: planeKey(i, j),
+        label: `${AXIS[i]}${AXIS[j]}`,
+        i,
+        j,
+      })
+    }
+  }
+  return planes
+}
+
+const EIGHT_D_PLANES = build8DPlaneDefs()
+
 function initialAngles(): Record<string, number> {
   const angles: Record<string, number> = {}
   PLANE_LAYOUT.allPlanes.forEach((plane) => {
@@ -112,6 +129,18 @@ function initialAngles(): Record<string, number> {
   })
 
   // Requested practical defaults on W-axis couplings.
+  angles[planeKey(0, 3)] = 0.65
+  angles[planeKey(1, 3)] = -0.35
+  angles[planeKey(2, 3)] = 0.85
+  return angles
+}
+
+function initialAngles8D(): Record<string, number> {
+  const angles: Record<string, number> = {}
+  EIGHT_D_PLANES.forEach((plane) => {
+    angles[plane.key] = 0
+  })
+  // Keep intuitive defaults for W-couplings in the 8D subspace.
   angles[planeKey(0, 3)] = 0.65
   angles[planeKey(1, 3)] = -0.35
   angles[planeKey(2, 3)] = 0.85
@@ -199,6 +228,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
 
   // 16D constrained rotation controls.
   const [angles, setAngles] = useState<Record<string, number>>(() => initialAngles())
+  const [angles8D, setAngles8D] = useState<Record<string, number>>(() => initialAngles8D())
 
   const [isDragging, setIsDragging] = useState(false)
   const dragStart = useRef<{ x: number; y: number; rxy: number; rxz: number } | null>(null)
@@ -222,6 +252,13 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
       PLANE_LAYOUT.allPlanes.forEach((plane) => {
         if (plane.i < dimensionCap && plane.j < dimensionCap) {
           rotatePlane(vec, plane.i, plane.j, angles[plane.key] ?? 0)
+        }
+      })
+
+      // Full 8D subspace rotations (all C(8,2)=28 planes).
+      EIGHT_D_PLANES.forEach((plane) => {
+        if (plane.i < dimensionCap && plane.j < dimensionCap) {
+          rotatePlane(vec, plane.i, plane.j, angles8D[plane.key] ?? 0)
         }
       })
 
@@ -320,19 +357,19 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
 
   const projected = useMemo<ProjectedPoint[]>(() => {
     return buildProjected(true, 16)
-  }, [angles, points, rotXY, rotXZ, rotYZ, rotXWView, rotYWView, rotZWView, zoom])
+  }, [angles, angles8D, points, rotXY, rotXZ, rotYZ, rotXWView, rotYWView, rotZWView, zoom])
 
   const projectedBaseline = useMemo<ProjectedPoint[]>(() => {
     return buildProjected(false, 16)
-  }, [angles, points, rotXY, rotXZ, rotYZ, zoom])
+  }, [angles, angles8D, points, rotXY, rotXZ, rotYZ, zoom])
 
   const projected8Ref = useMemo<ProjectedPoint[]>(() => {
     return buildProjected(true, 8)
-  }, [angles, points, rotXY, rotXZ, rotYZ, rotXWView, rotYWView, rotZWView, zoom])
+  }, [angles, angles8D, points, rotXY, rotXZ, rotYZ, rotXWView, rotYWView, rotZWView, zoom])
 
   const projected4Ref = useMemo<ProjectedPoint[]>(() => {
     return buildProjected(true, 4)
-  }, [angles, points, rotXY, rotXZ, rotYZ, rotXWView, rotYWView, rotZWView, zoom])
+  }, [angles, angles8D, points, rotXY, rotXZ, rotYZ, rotXWView, rotYWView, rotZWView, zoom])
 
   const edges = useMemo(() => {
     const links: Array<{ from: ProjectedPoint; to: ProjectedPoint; chroma: number }> = []
@@ -405,6 +442,10 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
     setAngles((prev) => ({ ...prev, [key]: value }))
   }
 
+  function setPlaneAngle8D(key: string, value: number) {
+    setAngles8D((prev) => ({ ...prev, [key]: value }))
+  }
+
   function onPointerDown(event: React.PointerEvent<SVGSVGElement>) {
     setIsDragging(true)
     dragStart.current = {
@@ -446,20 +487,8 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
         />
         <span>{zoom.toFixed(2)}x</span>
 
-        <label className="metric-view-tilt" htmlFor="metric-rot-yz">YZ</label>
-        <input
-          id="metric-rot-yz"
-          type="range"
-          min={-PI}
-          max={PI}
-          step={0.01}
-          value={rotYZ}
-          onChange={(e) => setRotYZ(Number.parseFloat(e.target.value))}
-        />
-        <code>{rotYZ.toFixed(3)} rad</code>
-
         <span className="metric4d-drag-hint">Drag canvas -&gt; XY / XZ</span>
-        <label className="metric-delta-toggle" htmlFor="delta-overlay">
+        <label className="metric-delta-toggle metric-delta-toggle-4d" htmlFor="delta-overlay">
           <input
             id="delta-overlay"
             type="checkbox"
@@ -468,7 +497,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
           />
           Show 4D Delta
         </label>
-        <label className="metric-delta-toggle" htmlFor="delta-overlay-8d">
+        <label className="metric-delta-toggle metric-delta-toggle-8d" htmlFor="delta-overlay-8d">
           <input
             id="delta-overlay-8d"
             type="checkbox"
@@ -477,7 +506,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
           />
           Show 8D Delta
         </label>
-        <label className="metric-delta-toggle" htmlFor="delta-overlay-16d">
+        <label className="metric-delta-toggle metric-delta-toggle-16d" htmlFor="delta-overlay-16d">
           <input
             id="delta-overlay-16d"
             type="checkbox"
@@ -489,8 +518,44 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
       </div>
 
       <div className="metric4d-view-row">
-        <span className="metric4d-label">4D view space</span>
-        <label className="metric4d-plane-row">
+        <span className="metric4d-label">4D view rotations (6)</span>
+        <label className="metric4d-plane-row metric4d-plane-row-4d">
+          <span>XYv</span>
+          <input
+            type="range"
+            min={-PI}
+            max={PI}
+            step={0.01}
+            value={rotXY}
+            onChange={(e) => setRotXY(Number.parseFloat(e.target.value))}
+          />
+          <code>{rotXY.toFixed(3)} rad</code>
+        </label>
+        <label className="metric4d-plane-row metric4d-plane-row-4d">
+          <span>XZv</span>
+          <input
+            type="range"
+            min={-PI}
+            max={PI}
+            step={0.01}
+            value={rotXZ}
+            onChange={(e) => setRotXZ(Number.parseFloat(e.target.value))}
+          />
+          <code>{rotXZ.toFixed(3)} rad</code>
+        </label>
+        <label className="metric4d-plane-row metric4d-plane-row-4d">
+          <span>YZv</span>
+          <input
+            type="range"
+            min={-PI}
+            max={PI}
+            step={0.01}
+            value={rotYZ}
+            onChange={(e) => setRotYZ(Number.parseFloat(e.target.value))}
+          />
+          <code>{rotYZ.toFixed(3)} rad</code>
+        </label>
+        <label className="metric4d-plane-row metric4d-plane-row-4d">
           <span>XWv</span>
           <input
             type="range"
@@ -502,7 +567,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
           />
           <code>{rotXWView.toFixed(3)} rad</code>
         </label>
-        <label className="metric4d-plane-row">
+        <label className="metric4d-plane-row metric4d-plane-row-4d">
           <span>YWv</span>
           <input
             type="range"
@@ -514,7 +579,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
           />
           <code>{rotYWView.toFixed(3)} rad</code>
         </label>
-        <label className="metric4d-plane-row">
+        <label className="metric4d-plane-row metric4d-plane-row-4d">
           <span>ZWv</span>
           <input
             type="range"
@@ -691,6 +756,31 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
           />
         ))}
       </svg>
+
+      <div className="metric16d-panel metric8d-panel">
+        <div className="metric16d-head">
+          <span className="metric4d-label">8D complete rotations (28)</span>
+          <span className="metric16d-note">All pairwise planes in {`{X,Y,Z,W,U,V,S,T}`}</span>
+        </div>
+        <div className="metric16d-group">
+          <div className="metric16d-grid metric16d-grid-8d">
+            {EIGHT_D_PLANES.map((plane) => (
+              <label key={`8d-${plane.key}`} className="metric4d-plane-row metric16d-plane-row metric4d-plane-row-8d">
+                <span>{plane.label}</span>
+                <input
+                  type="range"
+                  min={-PI}
+                  max={PI}
+                  step={0.01}
+                  value={angles8D[plane.key] ?? 0}
+                  onChange={(e) => setPlaneAngle8D(plane.key, Number.parseFloat(e.target.value))}
+                />
+                <code>{(angles8D[plane.key] ?? 0).toFixed(3)} rad</code>
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
 
       <div className="metric16d-panel">
         <div className="metric16d-head">

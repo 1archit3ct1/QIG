@@ -669,6 +669,21 @@
   accent-color: var(--accent);
 }
 
+.metric-delta-toggle-4d {
+  color: #7b85a6;
+  font-weight: 700;
+}
+
+.metric-delta-toggle-8d {
+  color: #ff3838;
+  font-weight: 700;
+}
+
+.metric-delta-toggle-16d {
+  color: #00ff41;
+  font-weight: 700;
+}
+
 .metric4d-view-row {
   margin-bottom: 0.55rem;
   border: 1px solid var(--line);
@@ -717,6 +732,14 @@
   font-size: 0.8rem;
   width: 2.5rem;
   color: var(--ink);
+}
+
+.metric4d-plane-row-4d span {
+  color: #4f7fff;
+}
+
+.metric4d-plane-row-8d span {
+  color: #ff3838;
 }
 
 .metric4d-plane-row input[type='range'] {
@@ -778,6 +801,14 @@
 
 .metric16d-grid-chain {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric16d-grid-8d {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metric8d-panel {
+  margin-top: 0.65rem;
 }
 
 .metric16d-plane-row {
@@ -1124,6 +1155,10 @@
 
   .metric16d-grid,
   .metric16d-grid-chain {
+    grid-template-columns: 1fr;
+  }
+
+  .metric16d-grid-8d {
     grid-template-columns: 1fr;
   }
 }
