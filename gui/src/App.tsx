@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { parseSimulationOutput, type SimulationId } from './outputParser'
+import { parseSimulationOutput, type MetricPoint, type SimulationId } from './outputParser'
 import MetricSpaceView, { type MetricPoint16D } from './MetricSpaceView'
 import './App.css'
 
@@ -259,43 +259,76 @@ function deriveTimelineFromResult(
   }))
 }
 
-function buildComplexityVector16(y: number, index: number, total: number): number[] {
-  const normalizedX = total > 1 ? index / (total - 1) : 0
-  const normalizedY = Number.isFinite(y) ? y : 0
-  const x = normalizedX * 2 - 1
-  const yScaled = Math.tanh(normalizedY / 6)
-  const zWave = Math.sin(normalizedX * Math.PI * 2 + 0.8) * 0.65
-  const wSeries = 1
-  const u = Math.sin((index + 1) * 0.37 + 0.5)
-  const vComp = Math.cos((index + 1) * 0.23 - 0.6)
-  const s = Math.tanh(normalizedY / 8)
-  const tt = Math.sin((normalizedX * 2 - 1) * Math.PI * 1.5)
-  const a = Math.cos((index + 1) * 0.17 + normalizedY * 0.11)
-  const b = Math.sin((index + 1) * 0.14 - 0.9)
-  const c = Math.cos(normalizedX * Math.PI * 4 + normalizedY * 0.06)
-  const d = Math.sin(normalizedY * 0.04 + index * 0.08)
-  const e = Math.tanh((normalizedY - 2) / 9)
-  const f = Math.sin(normalizedX * Math.PI * 3.2)
-  const g = Math.cos(normalizedX * Math.PI * 2.4 + 0.7)
-  const h = Math.sin((index + 1) * 0.09 + normalizedY * 0.02)
+function finiteSeriesValue(value: number, fallback: number): number {
+  return Number.isFinite(value) ? value : fallback
+}
+
+function stabilizeMetricDenominator(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 1e-6
+  }
+  if (Math.abs(value) < 1e-6) {
+    return value < 0 ? -1e-6 : 1e-6
+  }
+  return value
+}
+
+function buildRawExpansionVector16(
+  points: MetricPoint[],
+  index: number,
+  cumulativeArea: number,
+  cumulativeAbsDelta: number,
+  cumulativeSum: number,
+): number[] {
+  const point = points[index]
+  const prev = index > 0 ? points[index - 1] : point
+  const next = index < points.length - 1 ? points[index + 1] : point
+
+  const rawT = finiteSeriesValue(point.x, index)
+  const rawY = finiteSeriesValue(point.y, 0)
+  const prevT = finiteSeriesValue(prev.x, index - 1)
+  const prevY = finiteSeriesValue(prev.y, rawY)
+  const nextT = finiteSeriesValue(next.x, index + 1)
+  const nextY = finiteSeriesValue(next.y, rawY)
+
+  const dtPrev = index > 0 ? Math.max(Math.abs(rawT - prevT), 1e-6) : 1
+  const dtNext = index < points.length - 1 ? Math.max(Math.abs(nextT - rawT), 1e-6) : dtPrev
+  const spanT = index > 0 && index < points.length - 1
+    ? Math.max(Math.abs(nextT - prevT), 1e-6)
+    : Math.max(dtPrev + dtNext, 1e-6)
+
+  const slopePrev = index > 0 ? (rawY - prevY) / dtPrev : 0
+  const slopeNext = index < points.length - 1 ? (nextY - rawY) / dtNext : slopePrev
+  const slope = index > 0 && index < points.length - 1
+    ? (nextY - prevY) / spanT
+    : (index > 0 ? slopePrev : slopeNext)
+  const curvature = index > 0 && index < points.length - 1
+    ? (slopeNext - slopePrev) / Math.max(spanT * 0.5, 1e-6)
+    : 0
+
+  const runningMean = cumulativeSum / (index + 1)
+  const localSpan = nextY - prevY
+  const centeredValue = rawY - runningMean
+  const slopeEnergy = slope * rawY
+  const curvatureLift = curvature * rawT
 
   return [
-    x,
-    yScaled,
-    zWave,
-    wSeries,
-    u,
-    vComp,
-    s,
-    tt,
-    a,
-    b,
-    c,
-    d,
-    e,
-    f,
-    g,
-    h,
+    rawT,
+    rawY,
+    slope,
+    cumulativeArea,
+    runningMean,
+    Math.abs(slope),
+    curvature,
+    rawT * rawY,
+    rawT * rawT,
+    rawY * rawY,
+    cumulativeAbsDelta,
+    centeredValue,
+    slopeEnergy,
+    curvatureLift,
+    localSpan,
+    (rawY - prevY) * (nextY - rawY),
   ]
 }
 
@@ -658,20 +691,41 @@ function App() {
       return []
     }
 
+    let cumulativeArea = 0
+    let cumulativeAbsDelta = 0
+    let cumulativeSum = 0
+
     return complexityChart.points.map((point, index, arr) => {
-      const vec16 = buildComplexityVector16(point.y, index, arr.length)
+      const rawT = finiteSeriesValue(point.x, index)
+      const rawY = finiteSeriesValue(point.y, 0)
+      const prevPoint = index > 0 ? arr[index - 1] : point
+      const prevT = finiteSeriesValue(prevPoint.x, index - 1)
+      const prevY = finiteSeriesValue(prevPoint.y, rawY)
+
+      if (index > 0) {
+        const dt = Math.max(Math.abs(rawT - prevT), 1e-6)
+        cumulativeArea += ((prevY + rawY) * 0.5) * dt
+        cumulativeAbsDelta += Math.abs(rawY - prevY)
+      }
+
+      cumulativeSum += rawY
+
+      const vec16 = buildRawExpansionVector16(
+        complexityChart.points,
+        index,
+        cumulativeArea,
+        cumulativeAbsDelta,
+        cumulativeSum,
+      )
       const c4 = normPrefix(vec16, 4)
       const c8 = normPrefix(vec16, 8)
       const c16 = normPrefix(vec16, 16)
       const d1 = c8 - c4
       const d2 = c16 - c8
-      const ratio = d1 / d2
-      const scaledT = arr.length > 1
-        ? (index / (arr.length - 1)) * DIVERGENCE_TIMESTEP_MAX
-        : 0
+      const ratio = d1 / stabilizeMetricDenominator(d2)
 
       return {
-        t: scaledT,
+        t: rawT,
         c4,
         c8,
         c16,
