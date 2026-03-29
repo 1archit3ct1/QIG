@@ -1058,12 +1058,6 @@ function App() {
             <p>{errorText}</p>
           </div>
         )}
-        {exportStatus && (
-          <div className={`alert ${exportStatus.tone === 'ok' ? 'success' : 'error'}`}>
-            <strong>{exportStatus.tone === 'ok' ? 'Export Ready:' : 'Export Blocked:'}</strong>
-            <p>{exportStatus.text}</p>
-          </div>
-        )}
       </section>
 
       <section className="panel timeline-panel">
@@ -1381,6 +1375,12 @@ function App() {
             Export Charts CSV
           </button>
         </div>
+        {exportStatus && (
+          <div className={`alert ${exportStatus.tone === 'ok' ? 'success' : 'error'}`}>
+            <strong>{exportStatus.tone === 'ok' ? 'Export Ready:' : 'Export Blocked:'}</strong>
+            <p>{exportStatus.text}</p>
+          </div>
+        )}
       </section>
 
       <section className="panel reliability-panel">
