@@ -20,7 +20,7 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 from collections import deque
-import time
+from time import perf_counter
 
 
 # Physical constants (natural units with hbar = 1 for computation)
@@ -81,7 +81,7 @@ class ComplexityTracker:
         self.circuit_depth: int = 0
         self.total_complexity: float = 0.0
         self.total_energy: float = 0.0
-        self.start_time: float = time.time()
+        self.start_time: float = perf_counter()
         self.history: deque = deque(maxlen=1000)
         self.current_entropy: float = 0.0
 
@@ -221,7 +221,7 @@ class ComplexityTracker:
     def _record_snapshot(self):
         """Record current state for history."""
         self.history.append(ComplexitySnapshot(
-            timestamp=time.time() - self.start_time,
+            timestamp=perf_counter() - self.start_time,
             circuit_depth=self.circuit_depth,
             gate_count=len(self.gates_applied),
             complexity=self.total_complexity,

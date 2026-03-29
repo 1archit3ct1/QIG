@@ -30,6 +30,11 @@ export type ComplexityMetrics = {
   bulkVolume: number | null
 }
 
+export type ComplexityRateSample = {
+  x: number
+  y: number
+}
+
 function extractFloat(pattern: RegExp, text: string): number | null {
   const match = text.match(pattern)
   if (!match) {
@@ -123,6 +128,24 @@ export function parseComplexityMetrics(stdout: string): ComplexityMetrics | null
   return Object.values(metrics).some((value) => value !== null)
     ? metrics
     : null
+}
+
+export function parseComplexityRateSeries(stdout: string): ComplexityRateSample[] {
+  const points: ComplexityRateSample[] = []
+
+  for (const line of stdout.split('\n')) {
+    const match = line.match(/t=([0-9]+\.?[0-9]*),\s*C=[0-9]+\.?[0-9]*,\s*dC\/dt=([0-9]+\.?[0-9]*)/)
+    if (!match) {
+      continue
+    }
+
+    points.push({
+      x: Number.parseFloat(match[1]),
+      y: Number.parseFloat(match[2]),
+    })
+  }
+
+  return points.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
 }
 
 export function parseSimulationOutput(

@@ -10,7 +10,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { parseComplexityMetrics, parseSimulationOutput, type ComplexityMetrics, type SimulationId } from './outputParser'
+import {
+  parseComplexityMetrics,
+  parseComplexityRateSeries,
+  parseSimulationOutput,
+  type ComplexityMetrics,
+  type SimulationId,
+} from './outputParser'
 import MetricSpaceView, { type MetricPoint16D } from './MetricSpaceView'
 import './App.css'
 
@@ -384,6 +390,13 @@ function App() {
         }
       : null
   }, [isRunning, result])
+
+  const complexityRateSeries = useMemo(() => {
+    if (!result) {
+      return []
+    }
+    return parseComplexityRateSeries(result.stdout)
+  }, [result])
 
   const baselineParsed = useMemo(() => {
     if (!baselineResult) {
@@ -1057,24 +1070,76 @@ function App() {
         )}
 
         {complexityMetrics && (
-          <div className="divergence-values-grid">
-            <article>
-              <h3>Total Complexity C(t)</h3>
-              <p>{complexityMetrics.totalComplexity?.toFixed(6) ?? '—'}</p>
-            </article>
-            <article>
-              <h3>Complexity Growth dC/dt</h3>
-              <p>{complexityMetrics.dcdt?.toFixed(6) ?? '—'}</p>
-            </article>
-            <article>
-              <h3>Lloyd Fraction</h3>
-              <p>{complexityMetrics.lloydFraction !== null ? `${(complexityMetrics.lloydFraction * 100).toFixed(1)}%` : '—'}</p>
-            </article>
-            <article>
-              <h3>Bulk Volume = C·G_N·l_AdS</h3>
-              <p>{complexityMetrics.bulkVolume?.toFixed(6) ?? '—'}</p>
-            </article>
-          </div>
+          <>
+            <div className="divergence-values-grid">
+              <article>
+                <h3>Total Complexity C(t)</h3>
+                <p>{complexityMetrics.totalComplexity?.toFixed(6) ?? '—'}</p>
+              </article>
+              <article>
+                <h3>Complexity Growth dC/dt</h3>
+                <p>{complexityMetrics.dcdt?.toFixed(6) ?? '—'}</p>
+              </article>
+              <article>
+                <h3>Lloyd Fraction</h3>
+                <p>{complexityMetrics.lloydFraction !== null ? `${(complexityMetrics.lloydFraction * 100).toFixed(1)}%` : '—'}</p>
+              </article>
+              <article>
+                <h3>Bulk Volume = C·G_N·l_AdS</h3>
+                <p>{complexityMetrics.bulkVolume?.toFixed(6) ?? '—'}</p>
+              </article>
+            </div>
+
+            {complexityRateSeries.length > 0 && (
+              <article className="sparkline-card">
+                <div className="label-row compact">
+                  <h3>dC/dt Over Time</h3>
+                  <span className="hint">Raw Python stream output</span>
+                </div>
+                <div style={{ width: '100%', height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={complexityRateSeries} margin={{ top: 10, right: 16, left: 8, bottom: 10 }}>
+                      <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
+                      <XAxis
+                        type="number"
+                        dataKey="x"
+                        tick={{ fill: chartColors.tick, fontSize: 12 }}
+                        stroke={chartColors.border}
+                        domain={['dataMin', 'dataMax']}
+                      />
+                      <YAxis
+                        type="number"
+                        dataKey="y"
+                        tick={{ fill: chartColors.tick, fontSize: 12 }}
+                        stroke={chartColors.border}
+                        domain={['dataMin', 'dataMax']}
+                        width={82}
+                      />
+                      <Tooltip
+                        formatter={(value) => Number(value).toFixed(6)}
+                        labelFormatter={(value) => `t = ${Number(value).toFixed(3)}`}
+                        contentStyle={{
+                          borderRadius: 10,
+                          border: `1px solid ${chartColors.border}`,
+                          background: chartColors.bg,
+                        }}
+                      />
+                      <Line
+                        type="linear"
+                        dataKey="y"
+                        stroke={chartColors.line}
+                        strokeWidth={2.1}
+                        dot={false}
+                        activeDot={{ r: 4 }}
+                        isAnimationActive
+                        animationDuration={300}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </article>
+            )}
+          </>
         )}
       </section>
 

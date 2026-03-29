@@ -53,7 +53,9 @@ def demo_complexity():
             check = tracker.check_lloyd_bound()
             rev_sym = "↺" if reversible else "→"
             landauer = "" if reversible else f" [Landauer: {landauer_energy(1):.2e} J]"
+            timestamp = tracker.history[-1].timestamp if tracker.history else 0.0
             print(f"  {rev_sym} Gate {name:10s} qubits={qubits}: "
+                  f"t={timestamp:.9f}, "
                   f"C={tracker.total_complexity:.2f}, "
                   f"dC/dt={check['dC/dt']:.3f}, "
                   f"Lloyd={check['fraction']:.1%}, "
@@ -107,7 +109,7 @@ def demo_compiler():
     from compiler.hyperbolic_embed import HyperbolicEmbedder, Task
     from compiler.complexity_scheduler import ComplexityScheduler
 
-    # ── Build a realistic task graph ──
+    # —— Build a realistic task graph ——
     # Simulating an ML inference pipeline (transformer-like)
     tasks = [
         Task(0,  "embedding",        compute_cost=10.0,  memory_bytes=1024,
@@ -155,7 +157,7 @@ def demo_compiler():
             vol = (task.data_volume or {}).get(dep_id, 1.0)
             G.add_edge(dep_id, task.id, weight=vol)
 
-    # ── Hyperbolic Embedding ──
+    # —— Hyperbolic Embedding ——
     print("─" * 50)
     print("STEP 1: Embed task graph in Poincaré disk (hyperbolic space)")
     print("─" * 50)
@@ -184,7 +186,7 @@ def demo_compiler():
     print(f"  Improvement: {improvement:.1f}% reduction in communication cost")
     print()
 
-    # ── Complexity Scheduler ──
+    # —— Complexity Scheduler ——
     print("─" * 50)
     print("STEP 3: Complexity-budget-aware scheduling")
     print("─" * 50)

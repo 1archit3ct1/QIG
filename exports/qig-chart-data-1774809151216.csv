@@ -1,0 +1,37 @@
+chart_key,chart_title,x,y
+page-curve,"Page Curve (Radiation Entropy)",0,2.327
+page-curve,"Page Curve (Radiation Entropy)",4,2.331
+page-curve,"Page Curve (Radiation Entropy)",8,2.343
+page-curve,"Page Curve (Radiation Entropy)",12,2.306
+page-curve,"Page Curve (Radiation Entropy)",16,2.207
+page-curve,"Page Curve (Radiation Entropy)",20,2.209
+page-curve,"Page Curve (Radiation Entropy)",24,2.288
+page-curve,"Page Curve (Radiation Entropy)",28,2.128
+page-curve,"Page Curve (Radiation Entropy)",32,2.292
+page-curve,"Page Curve (Radiation Entropy)",36,2.379
+page-curve,"Page Curve (Radiation Entropy)",40,2.31
+page-curve,"Page Curve (Radiation Entropy)",44,2.252
+page-curve,"Page Curve (Radiation Entropy)",48,2.343
+page-curve,"Page Curve (Radiation Entropy)",52,2.424
+page-curve,"Page Curve (Radiation Entropy)",56,2.262
+page-curve,"Page Curve (Radiation Entropy)",60,2.378
+page-curve,"Page Curve (Radiation Entropy)",64,2.251
+page-curve,"Page Curve (Radiation Entropy)",68,2.315
+page-curve,"Page Curve (Radiation Entropy)",72,2.365
+page-curve,"Page Curve (Radiation Entropy)",76,2.331
+complexity-trajectory,"Complexity Trajectory",0,0
+complexity-trajectory,"Complexity Trajectory",0.1,5
+complexity-trajectory,"Complexity Trajectory",0.15,7
+complexity-trajectory,"Complexity Trajectory",0.35,17
+complexity-trajectory,"Complexity Trajectory",0.55,27
+complexity-trajectory,"Complexity Trajectory",0.75,37
+complexity-trajectory,"Complexity Trajectory",1.15,57
+complexity-trajectory,"Complexity Trajectory",1.25,62
+complexity-trajectory,"Complexity Trajectory",1.45,72
+complexity-trajectory,"Complexity Trajectory",1.5,74
+complexity-trajectory,"Complexity Trajectory",2,99
+complexity-trajectory,"Complexity Trajectory",2.1,104
+complexity-trajectory,"Complexity Trajectory",2.6,129
+complexity-trajectory,"Complexity Trajectory",2.65,131
+complexity-trajectory,"Complexity Trajectory",2.95,146
+complexity-trajectory,"Complexity Trajectory",3.05,151
