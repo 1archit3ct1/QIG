@@ -17,6 +17,8 @@ type MetricSpaceViewProps = {
   points: MetricPoint16D[]
 }
 
+type Vec4 = [number, number, number, number]
+
 type PlaneDef = {
   key: string
   label: string
@@ -62,7 +64,8 @@ const DIST_REDUCTION: Record<number, number> = {
   3: 6.2,
 }
 
-const DIST_2D = 5.8
+const DIST_4D = 5.9
+const DIST_3D = 5.8
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v
@@ -142,10 +145,20 @@ function rotatePlane(vec: number[], i: number, j: number, angle: number): void {
   vec[j] = vi * s + vj * c
 }
 
-function reduce16To3(vec16: Vec16): { xyz: [number, number, number]; chroma: number } {
+function rotatePlaneSimple(vec: number[], i: number, j: number, angle: number): void {
+  const bounded = clamp(angle, -PI, PI)
+  const c = Math.cos(bounded)
+  const s = Math.sin(bounded)
+  const vi = vec[i]
+  const vj = vec[j]
+  vec[i] = vi * c - vj * s
+  vec[j] = vi * s + vj * c
+}
+
+function reduce16To4(vec16: Vec16): { xyzw: Vec4; chroma: number } {
   const v = vec16.slice() as number[]
 
-  for (let last = 15; last >= 3; last -= 1) {
+  for (let last = 15; last >= 4; last -= 1) {
     const dist = DIST_REDUCTION[last]
     const denom = clamp(dist - v[last], 1.1, 99)
     const factor = clamp(dist / denom, 0.62, 1.72)
@@ -157,7 +170,7 @@ function reduce16To3(vec16: Vec16): { xyz: [number, number, number]; chroma: num
 
   const chroma = (vec16[3] + vec16[4] + vec16[5] + vec16[6] + vec16[7]) / 5
   return {
-    xyz: [v[0], v[1], v[2]],
+    xyzw: [v[0], v[1], v[2], v[3]],
     chroma: clamp(chroma, -1.8, 1.8),
   }
 }
@@ -177,6 +190,9 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
   const [rotXY, setRotXY] = useState(0.6)
   const [rotXZ, setRotXZ] = useState(0.42)
   const [rotYZ, setRotYZ] = useState(0)
+  const [rotXWView, setRotXWView] = useState(0)
+  const [rotYWView, setRotYWView] = useState(0)
+  const [rotZWView, setRotZWView] = useState(0)
 
   // 16D constrained rotation controls.
   const [angles, setAngles] = useState<Record<string, number>>(() => initialAngles())
@@ -198,20 +214,42 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
         rotatePlane(vec, plane.i, plane.j, angles[plane.key] ?? 0)
       })
 
-      const { xyz, chroma } = reduce16To3(vec as Vec16)
-      const x = finiteOrZero(xyz[0])
-      const y = finiteOrZero(xyz[1])
-      const z = finiteOrZero(xyz[2])
+      const { xyzw, chroma } = reduce16To4(vec as Vec16)
+      const view4 = [
+        finiteOrZero(xyzw[0]),
+        finiteOrZero(xyzw[1]),
+        finiteOrZero(xyzw[2]),
+        finiteOrZero(xyzw[3]),
+      ]
 
-      const denom = clamp(DIST_2D - z * 0.44, 1.0, 99)
-      const perspective = clamp(DIST_2D / denom, 0.6, 1.78)
+      // 4D view-space orientation controls.
+      rotatePlaneSimple(view4, 0, 1, rotXY)
+      rotatePlaneSimple(view4, 0, 2, rotXZ)
+      rotatePlaneSimple(view4, 1, 2, rotYZ)
+      rotatePlaneSimple(view4, 0, 3, rotXWView)
+      rotatePlaneSimple(view4, 1, 3, rotYWView)
+      rotatePlaneSimple(view4, 2, 3, rotZWView)
+
+      // 4D -> 3D perspective (compress along W axis).
+      const denomW = clamp(DIST_4D - view4[3], 0.95, 99)
+      const perspective4 = clamp(DIST_4D / denomW, 0.62, 1.78)
+      const x3 = view4[0] * perspective4
+      const y3 = view4[1] * perspective4
+      const z3 = view4[2] * perspective4
+
+      // 3D -> 2D perspective (compress along Z axis).
+      const denomZ = clamp(DIST_3D - z3 * 0.44, 1.0, 99)
+      const perspective3 = clamp(DIST_3D / denomZ, 0.62, 1.78)
+      const x = x3
+      const y = y3
+      const z = z3
 
       return {
         id: p.id,
-        xRaw: x * perspective,
-        yRaw: y * perspective,
+        xRaw: x * perspective3,
+        yRaw: y * perspective3,
         depth: z,
-        chroma: finiteOrZero(chroma),
+        chroma: finiteOrZero(clamp(chroma * 0.7 + view4[3] * 0.3, -1.8, 1.8)),
         label: p.label,
       }
     })
@@ -263,7 +301,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
         }
       })
       .sort((a, b) => a.depth - b.depth)
-  }, [angles, points, rotXY, rotXZ, rotYZ, zoom])
+  }, [angles, points, rotXY, rotXZ, rotYZ, rotXWView, rotYWView, rotZWView, zoom])
 
   const edges = useMemo(() => {
     const links: Array<{ from: ProjectedPoint; to: ProjectedPoint; chroma: number }> = []
@@ -335,6 +373,46 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
         <code>{rotYZ.toFixed(3)} rad</code>
 
         <span className="metric4d-drag-hint">Drag canvas -&gt; XY / XZ</span>
+      </div>
+
+      <div className="metric4d-view-row">
+        <span className="metric4d-label">4D view space</span>
+        <label className="metric4d-plane-row">
+          <span>XWv</span>
+          <input
+            type="range"
+            min={-PI}
+            max={PI}
+            step={0.01}
+            value={rotXWView}
+            onChange={(e) => setRotXWView(Number.parseFloat(e.target.value))}
+          />
+          <code>{rotXWView.toFixed(3)} rad</code>
+        </label>
+        <label className="metric4d-plane-row">
+          <span>YWv</span>
+          <input
+            type="range"
+            min={-PI}
+            max={PI}
+            step={0.01}
+            value={rotYWView}
+            onChange={(e) => setRotYWView(Number.parseFloat(e.target.value))}
+          />
+          <code>{rotYWView.toFixed(3)} rad</code>
+        </label>
+        <label className="metric4d-plane-row">
+          <span>ZWv</span>
+          <input
+            type="range"
+            min={-PI}
+            max={PI}
+            step={0.01}
+            value={rotZWView}
+            onChange={(e) => setRotZWView(Number.parseFloat(e.target.value))}
+          />
+          <code>{rotZWView.toFixed(3)} rad</code>
+        </label>
       </div>
 
       <svg

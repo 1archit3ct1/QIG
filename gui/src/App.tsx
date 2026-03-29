@@ -931,14 +931,14 @@ function App() {
 
       <section className="panel metric3d-panel">
         <div className="label-row">
-          <h2>3D Metric Space</h2>
+          <h2>4D View Space</h2>
           <span className="hint">Drag to rotate, zoom to inspect geometric structure</span>
         </div>
 
         {metricPoints.length > 0 ? (
           <MetricSpaceView points={metricPoints} />
         ) : (
-          <p className="hint">Run a simulation to populate 3D metric points.</p>
+          <p className="hint">Run a simulation to populate 16D-compressed 4D view points.</p>
         )}
       </section>
 

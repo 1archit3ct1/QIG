@@ -654,6 +654,22 @@
   font-style: italic;
 }
 
+.metric4d-view-row {
+  margin-bottom: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.4rem 0.55rem;
+  background: color-mix(in srgb, var(--panel-strong) 88%, white 12%);
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.metric4d-view-row .metric4d-label {
+  margin-right: 0.3rem;
+}
+
 .metric-view-tilt {
   margin-left: 0.5rem;
   font-weight: 700;
@@ -1072,6 +1088,10 @@
 
   .metric3d-toolbar {
     flex-wrap: wrap;
+  }
+
+  .metric4d-view-row {
+    padding: 0.4rem;
   }
 
   .metric4d-drag-hint {
