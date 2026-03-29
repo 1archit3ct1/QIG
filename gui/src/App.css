@@ -647,68 +647,123 @@
   accent-color: var(--accent);
 }
 
-  .metric4d-drag-hint {
-    margin-left: auto;
-    font-size: 0.78rem;
-    color: var(--muted);
-    font-style: italic;
-  }
+.metric4d-drag-hint {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-style: italic;
+}
 
-  .metric4d-planes {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-    padding: 0.45rem 0.6rem;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--panel-strong) 88%, white 12%);
-    margin-bottom: 0.55rem;
-    font-size: 0.82rem;
-  }
+.metric-view-tilt {
+  margin-left: 0.5rem;
+  font-weight: 700;
+}
 
-  .metric4d-label {
-    font-weight: 700;
-    font-size: 0.76rem;
-    color: var(--ink-soft);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    margin-right: 0.3rem;
-  }
+.metric3d-toolbar code {
+  font-family: var(--mono);
+  color: var(--muted);
+  font-size: 0.78rem;
+  min-width: 5.2rem;
+}
 
-  .metric4d-plane-row {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    color: var(--ink-soft);
-  }
+.metric4d-label {
+  font-weight: 700;
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 
-  .metric4d-plane-row span {
-    font-weight: 700;
-    font-size: 0.8rem;
-    width: 2.2rem;
-    color: var(--ink);
-  }
+.metric4d-plane-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-soft);
+}
 
-  .metric4d-plane-row input[type='range'] {
-    width: 110px;
-    accent-color: var(--accent-3);
-  }
+.metric4d-plane-row span {
+  font-weight: 700;
+  font-size: 0.8rem;
+  width: 2.5rem;
+  color: var(--ink);
+}
 
-  .metric4d-plane-row code {
-    font-family: var(--mono);
-    font-size: 0.76rem;
-    color: var(--muted);
-    width: 5.5rem;
-  }
+.metric4d-plane-row input[type='range'] {
+  width: 140px;
+  accent-color: var(--accent-3);
+}
 
-  .metric4d-legend {
-    display: flex;
-    gap: 0.7rem;
-    margin-left: auto;
-    font-size: 0.78rem;
-    font-weight: 600;
-  }
+.metric4d-plane-row code {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--muted);
+  width: 5.6rem;
+}
+
+.metric16d-panel {
+  margin-top: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.6rem;
+  background: color-mix(in srgb, var(--panel-strong) 88%, white 12%);
+}
+
+.metric16d-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin-bottom: 0.45rem;
+}
+
+.metric16d-note {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.metric16d-groups {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.metric16d-group {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.5rem;
+  background: color-mix(in srgb, var(--panel-strong) 92%, white 8%);
+}
+
+.metric16d-group h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.metric16d-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.42rem 0.5rem;
+}
+
+.metric16d-grid-chain {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric16d-plane-row {
+  border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+  border-radius: 8px;
+  padding: 0.22rem 0.3rem;
+  background: color-mix(in srgb, var(--panel) 92%, white 8%);
+}
+
+.metric4d-legend {
+  display: flex;
+  gap: 0.7rem;
+  justify-content: flex-end;
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
 
 .metric3d-canvas {
   width: 100%;
@@ -1013,5 +1068,23 @@
 
   .theme-switch {
     gap: 0.42rem;
+  }
+
+  .metric3d-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .metric4d-drag-hint {
+    margin-left: 0;
+  }
+
+  .metric16d-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .metric16d-grid,
+  .metric16d-grid-chain {
+    grid-template-columns: 1fr;
   }
 }

@@ -1,15 +1,27 @@
 import { useMemo, useRef, useState } from 'react'
 
-type Vec8 = [number, number, number, number, number, number, number, number]
+type Vec16 = [
+  number, number, number, number,
+  number, number, number, number,
+  number, number, number, number,
+  number, number, number, number,
+]
 
-export type MetricPoint8D = {
+export type MetricPoint16D = {
   id: string
-  v: Vec8
+  v: Vec16
   label: string
 }
 
 type MetricSpaceViewProps = {
-  points: MetricPoint8D[]
+  points: MetricPoint16D[]
+}
+
+type PlaneDef = {
+  key: string
+  label: string
+  i: number
+  j: number
 }
 
 type ProjectedPoint = {
@@ -23,115 +35,176 @@ type ProjectedPoint = {
   label: string
 }
 
-type PlaneRotation = {
-  key: string
-  label: string
-  i: number
-  j: number
-  angle: number
-}
-
 const WIDTH = 740
 const HEIGHT = 560
 const CENTER_X = WIDTH / 2
 const CENTER_Y = HEIGHT / 2
+const PI = Math.PI
 
-const FIT_MARGIN_X = 0.86
-const FIT_MARGIN_Y = 0.82
+const FIT_MARGIN_X = 0.88
+const FIT_MARGIN_Y = 0.84
+
+const AXIS = ['X', 'Y', 'Z', 'W', 'U', 'V', 'S', 'T', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const
 
 const DIST_REDUCTION: Record<number, number> = {
-  7: 7.2,
-  6: 6.8,
-  5: 6.4,
-  4: 6.0,
-  3: 5.6,
+  15: 9.8,
+  14: 9.5,
+  13: 9.2,
+  12: 8.9,
+  11: 8.6,
+  10: 8.3,
+  9: 8.0,
+  8: 7.7,
+  7: 7.4,
+  6: 7.1,
+  5: 6.8,
+  4: 6.5,
+  3: 6.2,
 }
 
-const DIST_2D = 5.4
+const DIST_2D = 5.8
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v
-}
-
-function rotatePlane(vec: number[], i: number, j: number, angle: number): void {
-  const c = Math.cos(angle)
-  const s = Math.sin(angle)
-  const vi = vec[i]
-  const vj = vec[j]
-  vec[i] = vi * c - vj * s
-  vec[j] = vi * s + vj * c
-}
-
-function project8Dto3D(vec8: Vec8): { xyz: [number, number, number]; chroma: number } {
-  const v = vec8.slice() as number[]
-  for (let last = 7; last >= 3; last -= 1) {
-    const dist = DIST_REDUCTION[last]
-    const denom = clamp(dist - v[last], 0.9, 99)
-    const factor = clamp(dist / denom, 0.55, 1.9)
-    for (let i = 0; i < last; i += 1) {
-      v[i] *= factor
-    }
-    v.pop()
-  }
-
-  return {
-    xyz: [v[0], v[1], v[2]],
-    chroma: clamp((vec8[3] + vec8[4] + vec8[5]) / 3, -1.6, 1.6),
-  }
-}
-
-function chromaColor(value: number): string {
-  const t = clamp((value + 1.6) / 3.2, 0, 1)
-  const r = Math.round(38 + t * (160 - 38))
-  const g = Math.round(198 + t * (92 - 198))
-  const b = 255
-  return `rgb(${r},${g},${b})`
 }
 
 function finiteOrZero(value: number): number {
   return Number.isFinite(value) ? value : 0
 }
 
+function planeKey(i: number, j: number): string {
+  const a = Math.min(i, j)
+  const b = Math.max(i, j)
+  return `${a}-${b}`
+}
+
+function buildPlaneDefs(): { anchorPlanes: PlaneDef[]; chainPlanes: PlaneDef[]; allPlanes: PlaneDef[] } {
+  const extraIndices = Array.from({ length: 13 }, (_, idx) => idx + 3)
+
+  const anchorPlanes: PlaneDef[] = extraIndices.flatMap((k) => [
+    { key: planeKey(0, k), label: `${AXIS[0]}${AXIS[k]}`, i: 0, j: k },
+    { key: planeKey(1, k), label: `${AXIS[1]}${AXIS[k]}`, i: 1, j: k },
+    { key: planeKey(2, k), label: `${AXIS[2]}${AXIS[k]}`, i: 2, j: k },
+  ])
+
+  const chainPlanes: PlaneDef[] = Array.from({ length: 12 }, (_, idx) => {
+    const i = idx + 3
+    const j = idx + 4
+    return { key: planeKey(i, j), label: `${AXIS[i]}${AXIS[j]}`, i, j }
+  })
+
+  return {
+    anchorPlanes,
+    chainPlanes,
+    allPlanes: [...anchorPlanes, ...chainPlanes],
+  }
+}
+
+const PLANE_LAYOUT = buildPlaneDefs()
+
+function initialAngles(): Record<string, number> {
+  const angles: Record<string, number> = {}
+  PLANE_LAYOUT.allPlanes.forEach((plane) => {
+    angles[plane.key] = 0
+  })
+
+  // Requested practical defaults on W-axis couplings.
+  angles[planeKey(0, 3)] = 0.65
+  angles[planeKey(1, 3)] = -0.35
+  angles[planeKey(2, 3)] = 0.85
+  return angles
+}
+
+function normalizeVec16(vec: number[]): number[] {
+  let sumSq = 0
+  for (let i = 0; i < 16; i += 1) {
+    sumSq += vec[i] * vec[i]
+  }
+  const norm = Math.sqrt(sumSq)
+  if (!Number.isFinite(norm) || norm <= 1e-8) {
+    return vec
+  }
+  const scale = Math.min(1, 1.25 / norm)
+  return vec.map((v) => v * scale)
+}
+
+function rotatePlane(vec: number[], i: number, j: number, angle: number): void {
+  // Constrained Givens rotation: bounded angle and attenuation by plane index.
+  const bounded = clamp(angle, -1.35, 1.35)
+  const attenuation = 1 / Math.sqrt(1 + 0.18 * Math.max(i, j))
+  const eff = bounded * attenuation
+
+  const c = Math.cos(eff)
+  const s = Math.sin(eff)
+  const vi = vec[i]
+  const vj = vec[j]
+  vec[i] = vi * c - vj * s
+  vec[j] = vi * s + vj * c
+}
+
+function reduce16To3(vec16: Vec16): { xyz: [number, number, number]; chroma: number } {
+  const v = vec16.slice() as number[]
+
+  for (let last = 15; last >= 3; last -= 1) {
+    const dist = DIST_REDUCTION[last]
+    const denom = clamp(dist - v[last], 1.1, 99)
+    const factor = clamp(dist / denom, 0.62, 1.72)
+    for (let i = 0; i < last; i += 1) {
+      v[i] *= factor
+    }
+    v.pop()
+  }
+
+  const chroma = (vec16[3] + vec16[4] + vec16[5] + vec16[6] + vec16[7]) / 5
+  return {
+    xyz: [v[0], v[1], v[2]],
+    chroma: clamp(chroma, -1.8, 1.8),
+  }
+}
+
+function chromaColor(value: number): string {
+  const t = clamp((value + 1.8) / 3.6, 0, 1)
+  const r = Math.round(36 + t * (168 - 36))
+  const g = Math.round(196 + t * (96 - 196))
+  const b = 255
+  return `rgb(${r},${g},${b})`
+}
+
 export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
   const [zoom, setZoom] = useState(1.25)
 
+  // View orientation controls remain direct and intuitive.
   const [rotXY, setRotXY] = useState(0.6)
   const [rotXZ, setRotXZ] = useState(0.42)
+  const [rotYZ, setRotYZ] = useState(0)
 
-  const [rotXW, setRotXW] = useState(0.65)
-  const [rotYW, setRotYW] = useState(-0.35)
-  const [rotZW, setRotZW] = useState(0.85)
-
-  const [rotUV, setRotUV] = useState(0.2)
-  const [rotST, setRotST] = useState(-0.15)
-  const [rotXT, setRotXT] = useState(0.18)
+  // 16D constrained rotation controls.
+  const [angles, setAngles] = useState<Record<string, number>>(() => initialAngles())
 
   const [isDragging, setIsDragging] = useState(false)
   const dragStart = useRef<{ x: number; y: number; rxy: number; rxz: number } | null>(null)
 
-  const rotations: PlaneRotation[] = [
-    { key: 'xy', label: 'XY', i: 0, j: 1, angle: rotXY },
-    { key: 'xz', label: 'XZ', i: 0, j: 2, angle: rotXZ },
-    { key: 'xw', label: 'XW', i: 0, j: 3, angle: rotXW },
-    { key: 'yw', label: 'YW', i: 1, j: 3, angle: rotYW },
-    { key: 'zw', label: 'ZW', i: 2, j: 3, angle: rotZW },
-    { key: 'uv', label: 'UV', i: 4, j: 5, angle: rotUV },
-    { key: 'st', label: 'ST', i: 6, j: 7, angle: rotST },
-    { key: 'xt', label: 'XT', i: 0, j: 7, angle: rotXT },
-  ]
-
   const projected = useMemo<ProjectedPoint[]>(() => {
     const raw = points.map((p) => {
-      const vec = p.v.map((value) => finiteOrZero(value)) as number[]
-      rotations.forEach((r) => rotatePlane(vec, r.i, r.j, r.angle))
+      const vec = normalizeVec16(p.v.map((value) => finiteOrZero(value)))
 
-      const { xyz, chroma } = project8Dto3D(vec as Vec8)
+      // Base view orientation planes in XYZ.
+      rotatePlane(vec, 0, 1, rotXY)
+      rotatePlane(vec, 0, 2, rotXZ)
+      rotatePlane(vec, 1, 2, rotYZ)
+
+      // Constrained higher-dimensional subspace rotations.
+      PLANE_LAYOUT.allPlanes.forEach((plane) => {
+        rotatePlane(vec, plane.i, plane.j, angles[plane.key] ?? 0)
+      })
+
+      const { xyz, chroma } = reduce16To3(vec as Vec16)
       const x = finiteOrZero(xyz[0])
       const y = finiteOrZero(xyz[1])
       const z = finiteOrZero(xyz[2])
 
-      const denom = clamp(DIST_2D - z * 0.45, 0.9, 99)
-      const perspective = clamp(DIST_2D / denom, 0.55, 1.95)
+      const denom = clamp(DIST_2D - z * 0.44, 1.0, 99)
+      const perspective = clamp(DIST_2D / denom, 0.6, 1.78)
 
       return {
         id: p.id,
@@ -147,15 +220,14 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
       (p) => Number.isFinite(p.xRaw) && Number.isFinite(p.yRaw) && Number.isFinite(p.depth) && Number.isFinite(p.chroma),
     )
 
-    // Safety fallback: never leave the canvas empty if projection collapses.
     const stableRaw = finiteRaw.length > 0
       ? finiteRaw
       : points.slice(0, 28).map((p, index) => {
           const angle = (index / Math.max(points.length, 1)) * Math.PI * 2
           return {
             id: `${p.id}-fallback`,
-            xRaw: Math.cos(angle) * 0.65,
-            yRaw: Math.sin(angle) * 0.45,
+            xRaw: Math.cos(angle) * 0.62,
+            yRaw: Math.sin(angle) * 0.42,
             depth: 0,
             chroma: 0,
             label: p.label,
@@ -177,8 +249,8 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
       .map((p) => {
         const x2d = CENTER_X + (p.xRaw - midX) * fitScale * zoom
         const y2d = CENTER_Y + (p.yRaw - midY) * fitScale * zoom
-        const radius = clamp(3.0 + p.depth * 0.8, 2.2, 7.0)
-        const opacity = clamp(0.58 + p.depth * 0.15, 0.24, 1)
+        const radius = clamp(2.9 + p.depth * 0.72, 2.1, 6.6)
+        const opacity = clamp(0.6 + p.depth * 0.14, 0.24, 1)
         return {
           id: p.id,
           x2d,
@@ -191,7 +263,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
         }
       })
       .sort((a, b) => a.depth - b.depth)
-  }, [points, zoom, rotations])
+  }, [angles, points, rotXY, rotXZ, rotYZ, zoom])
 
   const edges = useMemo(() => {
     const links: Array<{ from: ProjectedPoint; to: ProjectedPoint; chroma: number }> = []
@@ -204,6 +276,10 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
     }
     return links
   }, [projected])
+
+  function setPlaneAngle(key: string, value: number) {
+    setAngles((prev) => ({ ...prev, [key]: value }))
+  }
 
   function onPointerDown(event: React.PointerEvent<SVGSVGElement>) {
     setIsDragging(true)
@@ -231,8 +307,6 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
     dragStart.current = null
   }
 
-  const PI = Math.PI
-
   return (
     <div className="metric3d-wrap">
       <div className="metric3d-toolbar">
@@ -247,53 +321,20 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
           onChange={(e) => setZoom(Number.parseFloat(e.target.value))}
         />
         <span>{zoom.toFixed(2)}x</span>
-        <span className="metric4d-drag-hint">Drag canvas -&gt; XY / XZ planes</span>
-      </div>
 
-      <div className="metric4d-planes">
-        <span className="metric4d-label">8D subspace rotations</span>
+        <label className="metric-view-tilt" htmlFor="metric-rot-yz">YZ</label>
+        <input
+          id="metric-rot-yz"
+          type="range"
+          min={-PI}
+          max={PI}
+          step={0.01}
+          value={rotYZ}
+          onChange={(e) => setRotYZ(Number.parseFloat(e.target.value))}
+        />
+        <code>{rotYZ.toFixed(3)} rad</code>
 
-        <label className="metric4d-plane-row">
-          <span>XW</span>
-          <input type="range" min={-PI} max={PI} step={0.01} value={rotXW} onChange={(e) => setRotXW(Number.parseFloat(e.target.value))} />
-          <code>{rotXW.toFixed(3)} rad</code>
-        </label>
-
-        <label className="metric4d-plane-row">
-          <span>YW</span>
-          <input type="range" min={-PI} max={PI} step={0.01} value={rotYW} onChange={(e) => setRotYW(Number.parseFloat(e.target.value))} />
-          <code>{rotYW.toFixed(3)} rad</code>
-        </label>
-
-        <label className="metric4d-plane-row">
-          <span>ZW</span>
-          <input type="range" min={-PI} max={PI} step={0.01} value={rotZW} onChange={(e) => setRotZW(Number.parseFloat(e.target.value))} />
-          <code>{rotZW.toFixed(3)} rad</code>
-        </label>
-
-        <label className="metric4d-plane-row">
-          <span>UV</span>
-          <input type="range" min={-PI} max={PI} step={0.01} value={rotUV} onChange={(e) => setRotUV(Number.parseFloat(e.target.value))} />
-          <code>{rotUV.toFixed(3)} rad</code>
-        </label>
-
-        <label className="metric4d-plane-row">
-          <span>ST</span>
-          <input type="range" min={-PI} max={PI} step={0.01} value={rotST} onChange={(e) => setRotST(Number.parseFloat(e.target.value))} />
-          <code>{rotST.toFixed(3)} rad</code>
-        </label>
-
-        <label className="metric4d-plane-row">
-          <span>XT</span>
-          <input type="range" min={-PI} max={PI} step={0.01} value={rotXT} onChange={(e) => setRotXT(Number.parseFloat(e.target.value))} />
-          <code>{rotXT.toFixed(3)} rad</code>
-        </label>
-
-        <div className="metric4d-legend">
-          <span style={{ color: 'rgb(39,199,255)' }}>chroma low</span>
-          <span style={{ color: 'rgb(100,145,255)' }}>chroma mid</span>
-          <span style={{ color: 'rgb(160,92,255)' }}>chroma high</span>
-        </div>
+        <span className="metric4d-drag-hint">Drag canvas -&gt; XY / XZ</span>
       </div>
 
       <svg
@@ -329,7 +370,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
               <circle
                 cx={point.x2d}
                 cy={point.y2d}
-                r={point.radius + 3.4}
+                r={point.radius + 3.2}
                 fill={pointColor}
                 opacity={0.2}
               />
@@ -355,6 +396,61 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
           )
         })}
       </svg>
+
+      <div className="metric16d-panel">
+        <div className="metric16d-head">
+          <span className="metric4d-label">16D constrained rotations</span>
+          <span className="metric16d-note">Logical complete set: X/Y/Z anchors to latent axes + latent chain couplings</span>
+        </div>
+
+        <div className="metric16d-groups">
+          <section className="metric16d-group">
+            <h4>Anchor Plane Sliders (39)</h4>
+            <div className="metric16d-grid">
+              {PLANE_LAYOUT.anchorPlanes.map((plane) => (
+                <label key={plane.key} className="metric4d-plane-row metric16d-plane-row">
+                  <span>{plane.label}</span>
+                  <input
+                    type="range"
+                    min={-PI}
+                    max={PI}
+                    step={0.01}
+                    value={angles[plane.key] ?? 0}
+                    onChange={(e) => setPlaneAngle(plane.key, Number.parseFloat(e.target.value))}
+                  />
+                  <code>{(angles[plane.key] ?? 0).toFixed(3)} rad</code>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="metric16d-group">
+            <h4>Latent Chain Sliders (12)</h4>
+            <div className="metric16d-grid metric16d-grid-chain">
+              {PLANE_LAYOUT.chainPlanes.map((plane) => (
+                <label key={plane.key} className="metric4d-plane-row metric16d-plane-row">
+                  <span>{plane.label}</span>
+                  <input
+                    type="range"
+                    min={-PI}
+                    max={PI}
+                    step={0.01}
+                    value={angles[plane.key] ?? 0}
+                    onChange={(e) => setPlaneAngle(plane.key, Number.parseFloat(e.target.value))}
+                  />
+                  <code>{(angles[plane.key] ?? 0).toFixed(3)} rad</code>
+                </label>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <div className="metric4d-legend">
+          <span style={{ color: 'rgb(39,199,255)' }}>chroma low</span>
+          <span style={{ color: 'rgb(100,145,255)' }}>chroma mid</span>
+          <span style={{ color: 'rgb(168,96,255)' }}>chroma high</span>
+        </div>
+      </div>
     </div>
   )
 }

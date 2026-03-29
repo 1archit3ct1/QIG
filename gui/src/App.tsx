@@ -10,7 +10,7 @@ import {
   YAxis,
 } from 'recharts'
 import { parseSimulationOutput, type SimulationId } from './outputParser'
-import MetricSpaceView, { type MetricPoint8D } from './MetricSpaceView'
+import MetricSpaceView, { type MetricPoint16D } from './MetricSpaceView'
 import './App.css'
 
 type UiTheme = 'runway-tech' | 'utility-street' | 'cyber-minimal' | 'solar-lab' | 'deep-space'
@@ -457,12 +457,12 @@ function App() {
     )
   }
 
-  const metricPoints = useMemo<MetricPoint8D[]>(() => {
+  const metricPoints = useMemo<MetricPoint16D[]>(() => {
     if (!parsed) {
       return []
     }
 
-    const fromCharts: MetricPoint8D[] = []
+    const fromCharts: MetricPoint16D[] = []
     parsed.charts.slice(0, 2).forEach((chart, chartIndex) => {
       const wSeries = chartIndex === 0 ? -1 : 1
       chart.points.slice(0, 42).forEach((point, pointIndex) => {
@@ -471,9 +471,17 @@ function App() {
         const yScaled = Math.tanh(normalizedY / 6)
         const zWave = Math.sin(normalizedX * Math.PI * 2 + chartIndex * 0.8) * 0.65
         const u = Math.sin((pointIndex + 1) * 0.37 + chartIndex * 0.5)
-        const v = Math.cos((pointIndex + 1) * 0.23 - chartIndex * 0.6)
+        const vComp = Math.cos((pointIndex + 1) * 0.23 - chartIndex * 0.6)
         const s = Math.tanh(normalizedY / 8)
         const t = Math.sin((normalizedX * 2 - 1) * Math.PI * 1.5)
+        const a = Math.cos((pointIndex + 1) * 0.17 + normalizedY * 0.11)
+        const b = Math.sin((pointIndex + 1) * 0.14 - chartIndex * 0.9)
+        const c = Math.cos(normalizedX * Math.PI * 4 + normalizedY * 0.06)
+        const d = Math.sin(normalizedY * 0.04 + pointIndex * 0.08)
+        const e = Math.tanh((normalizedY - 2) / 9)
+        const f = Math.sin(normalizedX * Math.PI * 3.2)
+        const g = Math.cos(normalizedX * Math.PI * 2.4 + chartIndex * 0.7)
+        const h = Math.sin((pointIndex + 1) * 0.09 + normalizedY * 0.02)
 
         fromCharts.push({
           id: `chart-${chartIndex}-${pointIndex}`,
@@ -483,9 +491,17 @@ function App() {
             zWave,
             wSeries,
             u,
-            v,
+            vComp,
             s,
             t,
+            a,
+            b,
+            c,
+            d,
+            e,
+            f,
+            g,
+            h,
           ],
           label: `${chart.title} #${pointIndex}`,
         })
@@ -493,7 +509,7 @@ function App() {
     })
 
     const totalCards = Math.min(18, parsed.cards.length)
-    const fromCards: MetricPoint8D[] = parsed.cards.slice(0, totalCards).map((card, index) => {
+    const fromCards: MetricPoint16D[] = parsed.cards.slice(0, totalCards).map((card, index) => {
       const numeric = Number.parseFloat(card.value.replace(/[^0-9.-]/g, ''))
       const base = Number.isFinite(numeric) ? numeric : index + 1
       const wPhase = totalCards > 1 ? (index / (totalCards - 1)) * 2 - 1 : 0
@@ -501,12 +517,20 @@ function App() {
       const y = Math.cos(index * 0.52) * 0.78
       const z = Math.tanh(base / 12) * (index % 2 === 0 ? 1 : -1)
       const u = Math.sin(base * 0.11)
-      const v = Math.cos(base * 0.07 + index * 0.2)
+      const vComp = Math.cos(base * 0.07 + index * 0.2)
       const s = Math.tanh((base - 2) / 10)
       const t = Math.sin(index * 0.31 + base * 0.04)
+      const a = Math.cos(index * 0.27 + base * 0.03)
+      const b = Math.sin(index * 0.23 - base * 0.05)
+      const c = Math.tanh((base - 4) / 14)
+      const d = Math.cos(base * 0.017 + index * 0.33)
+      const e = Math.sin(base * 0.021 + index * 0.29)
+      const f = Math.cos(index * 0.42)
+      const g = Math.sin(index * 0.38)
+      const h = Math.cos(base * 0.013 + index * 0.15)
       return {
         id: `card-${index}`,
-        v: [x, y, z, wPhase, u, v, s, t],
+        v: [x, y, z, wPhase, u, vComp, s, t, a, b, c, d, e, f, g, h],
         label: card.label,
       }
     })
