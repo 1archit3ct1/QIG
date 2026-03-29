@@ -459,6 +459,12 @@
   color: #8e1649;
 }
 
+.alert.success {
+  background: var(--ok-bg);
+  border: 1px solid color-mix(in srgb, var(--ok-fg) 35%, white 65%);
+  color: var(--ok-fg);
+}
+
 .meta-grid {
   display: grid;
   grid-template-columns: 180px 1fr;

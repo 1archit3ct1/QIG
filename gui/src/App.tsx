@@ -39,16 +39,9 @@ type SimulationParameters = {
   energyRate: number
 }
 
-function downloadTextFile(filename: string, content: string, mimeType: string) {
-  const blob = new Blob([content], { type: mimeType })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  document.body.appendChild(anchor)
-  anchor.click()
-  document.body.removeChild(anchor)
-  URL.revokeObjectURL(url)
+type ExportStatus = {
+  tone: 'ok' | 'error'
+  text: string
 }
 
 type ScenarioPreset = {
@@ -68,6 +61,8 @@ type SimulationResult = {
   stdout: string
   stderr: string
 }
+
+const DIVERGENCE_TIMESTEP_MAX = 1000000
 
 const SIMULATIONS: Array<{ id: SimulationId; label: string; detail: string }> = [
   {
@@ -406,6 +401,7 @@ function App() {
   const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>(() => buildTimelineSteps('all'))
   const [presentationMode, setPresentationMode] = useState(false)
   const [divergenceStep, setDivergenceStep] = useState(0)
+  const [exportStatus, setExportStatus] = useState<ExportStatus | null>(null)
 
   const timelineTicker = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -466,8 +462,42 @@ function App() {
       .slice(0, 8)
   }, [parsed, baselineParsed])
 
-  function exportReportJson() {
+  function hasValidCards() {
+    return Boolean(
+      parsed && parsed.cards.some((card) => card.label.trim() && card.value.trim()),
+    )
+  }
+
+  function hasValidCharts() {
+    return Boolean(
+      parsed
+      && parsed.charts.some(
+        (chart) => chart.points.length > 0
+          && chart.points.every(
+            (point) => Number.isFinite(point.x) && Number.isFinite(point.y),
+          ),
+      ),
+    )
+  }
+
+  async function persistExport(filename: string, content: string) {
+    const savedPath = await invoke<string>('write_export_file', { filename, content })
+    setExportStatus({
+      tone: 'ok',
+      text: `Saved export to ${savedPath}`,
+    })
+  }
+
+  async function exportReportJson() {
     if (!result || !parsed) {
+      setExportStatus({ tone: 'error', text: 'Run a simulation before exporting a report.' })
+      return
+    }
+    if (!hasValidCards() && !hasValidCharts()) {
+      setExportStatus({
+        tone: 'error',
+        text: 'Export blocked: no structured metrics or chart data were parsed from stdout.',
+      })
       return
     }
 
@@ -489,17 +519,35 @@ function App() {
           }
         : null,
       parameters,
+      validation: {
+        metricCount: parsed.cards.length,
+        chartCount: parsed.charts.length,
+        chartPointCount: parsed.charts.reduce((sum, chart) => sum + chart.points.length, 0),
+        hasStructuredMetrics: hasValidCards(),
+        hasStructuredCharts: hasValidCharts(),
+      },
+      raw: {
+        stdoutPreview: result.stdout.split('\n').slice(0, 40),
+        stderrPreview: result.stderr.split('\n').slice(0, 20),
+      },
     }
 
-    downloadTextFile(
+    await persistExport(
       `qig-report-${result.simulation}-${Date.now()}.json`,
       JSON.stringify(payload, null, 2),
-      'application/json',
     )
   }
 
-  function exportChartCsv() {
+  async function exportChartCsv() {
     if (!parsed || parsed.charts.length === 0) {
+      setExportStatus({ tone: 'error', text: 'Run a simulation with chart output before exporting CSV.' })
+      return
+    }
+    if (!hasValidCharts()) {
+      setExportStatus({
+        tone: 'error',
+        text: 'Export blocked: parsed chart data is empty or contains invalid numeric values.',
+      })
       return
     }
 
@@ -510,10 +558,9 @@ function App() {
       })
     })
 
-    downloadTextFile(
+    await persistExport(
       `qig-chart-data-${Date.now()}.csv`,
       rows.join('\n'),
-      'text/csv;charset=utf-8',
     )
   }
 
@@ -619,9 +666,12 @@ function App() {
       const d1 = c8 - c4
       const d2 = c16 - c8
       const ratio = d1 / d2
+      const scaledT = arr.length > 1
+        ? (index / (arr.length - 1)) * DIVERGENCE_TIMESTEP_MAX
+        : 0
 
       return {
-        t: point.x,
+        t: scaledT,
         c4,
         c8,
         c16,
@@ -644,7 +694,10 @@ function App() {
     if (divergenceSeries.length === 0) {
       return null
     }
-    const idx = Math.min(Math.max(divergenceStep, 0), divergenceSeries.length - 1)
+    const clampedStep = Math.min(Math.max(divergenceStep, 0), DIVERGENCE_TIMESTEP_MAX)
+    const idx = divergenceSeries.length === 1
+      ? 0
+      : Math.round((clampedStep / DIVERGENCE_TIMESTEP_MAX) * (divergenceSeries.length - 1))
     return divergenceSeries[idx]
   }, [divergenceSeries, divergenceStep])
 
@@ -687,7 +740,7 @@ function App() {
       setDivergenceStep(0)
       return
     }
-    setDivergenceStep(divergenceSeries.length - 1)
+    setDivergenceStep(DIVERGENCE_TIMESTEP_MAX)
   }, [divergenceSeries])
 
   const reliabilityData = useMemo(() => analyzeReliability(result), [result])
@@ -743,6 +796,7 @@ function App() {
 
     setIsRunning(true)
     setErrorText('')
+    setExportStatus(null)
 
     try {
       const data = await invoke<SimulationResult>('run_simulation', {
@@ -947,6 +1001,12 @@ function App() {
             <p>{errorText}</p>
           </div>
         )}
+        {exportStatus && (
+          <div className={`alert ${exportStatus.tone === 'ok' ? 'success' : 'error'}`}>
+            <strong>{exportStatus.tone === 'ok' ? 'Export Ready:' : 'Export Blocked:'}</strong>
+            <p>{exportStatus.text}</p>
+          </div>
+        )}
       </section>
 
       <section className="panel timeline-panel">
@@ -1112,13 +1172,13 @@ function App() {
                 id="divergence-step"
                 type="range"
                 min={0}
-                max={divergenceSeries.length - 1}
+                max={DIVERGENCE_TIMESTEP_MAX}
                 step={1}
-                value={Math.min(divergenceStep, divergenceSeries.length - 1)}
+                value={Math.min(Math.max(divergenceStep, 0), DIVERGENCE_TIMESTEP_MAX)}
                 onChange={(e) => setDivergenceStep(Number.parseInt(e.target.value, 10) || 0)}
               />
               <span>
-                t = {currentDivergence.t}
+                t = {currentDivergence.t.toFixed(2)}
               </span>
             </div>
 
@@ -1250,7 +1310,7 @@ function App() {
           <button
             type="button"
             className="mini-button"
-            onClick={exportReportJson}
+            onClick={() => void exportReportJson()}
             disabled={!result || !parsed}
           >
             Export JSON Report
@@ -1258,7 +1318,7 @@ function App() {
           <button
             type="button"
             className="mini-button"
-            onClick={exportChartCsv}
+            onClick={() => void exportChartCsv()}
             disabled={!parsed || parsed.charts.length === 0}
           >
             Export Charts CSV

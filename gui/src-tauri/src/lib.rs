@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -199,6 +200,30 @@ fn run_simulation(
   })
 }
 
+fn sanitize_export_filename(filename: &str) -> String {
+  filename
+    .chars()
+    .map(|ch| match ch {
+      'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '-' | '_' => ch,
+      _ => '_',
+    })
+    .collect()
+}
+
+#[tauri::command]
+fn write_export_file(filename: String, content: String) -> Result<String, String> {
+  let root = repo_root();
+  let exports_dir = root.join("exports");
+  fs::create_dir_all(&exports_dir)
+    .map_err(|e| format!("failed to create exports directory: {e}"))?;
+
+  let sanitized = sanitize_export_filename(&filename);
+  let target = exports_dir.join(sanitized);
+  fs::write(&target, content).map_err(|e| format!("failed to write export file: {e}"))?;
+
+  Ok(target.to_string_lossy().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -212,7 +237,11 @@ pub fn run() {
       }
       Ok(())
     })
-    .invoke_handler(tauri::generate_handler![list_simulations, run_simulation])
+    .invoke_handler(tauri::generate_handler![
+      list_simulations,
+      run_simulation,
+      write_export_file
+    ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
