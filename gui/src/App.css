@@ -654,6 +654,20 @@
   font-style: italic;
 }
 
+.metric-delta-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  margin-left: 0.4rem;
+  user-select: none;
+}
+
+.metric-delta-toggle input {
+  accent-color: var(--accent);
+}
+
 .metric4d-view-row {
   margin-bottom: 0.55rem;
   border: 1px solid var(--line);
@@ -1095,6 +1109,10 @@
   }
 
   .metric4d-drag-hint {
+    margin-left: 0;
+  }
+
+  .metric-delta-toggle {
     margin-left: 0;
   }
 

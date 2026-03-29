@@ -193,6 +193,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
   const [rotXWView, setRotXWView] = useState(0)
   const [rotYWView, setRotYWView] = useState(0)
   const [rotZWView, setRotZWView] = useState(0)
+  const [showDeltaOverlay, setShowDeltaOverlay] = useState(true)
 
   // 16D constrained rotation controls.
   const [angles, setAngles] = useState<Record<string, number>>(() => initialAngles())
@@ -200,7 +201,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
   const [isDragging, setIsDragging] = useState(false)
   const dragStart = useRef<{ x: number; y: number; rxy: number; rxz: number } | null>(null)
 
-  const projected = useMemo<ProjectedPoint[]>(() => {
+  const buildProjected = (include4DViewRotations: boolean): ProjectedPoint[] => {
     const raw = points.map((p) => {
       const vec = normalizeVec16(p.v.map((value) => finiteOrZero(value)))
 
@@ -222,13 +223,17 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
         finiteOrZero(xyzw[3]),
       ]
 
-      // 4D view-space orientation controls.
+      // 3D orientation controls.
       rotatePlaneSimple(view4, 0, 1, rotXY)
       rotatePlaneSimple(view4, 0, 2, rotXZ)
       rotatePlaneSimple(view4, 1, 2, rotYZ)
-      rotatePlaneSimple(view4, 0, 3, rotXWView)
-      rotatePlaneSimple(view4, 1, 3, rotYWView)
-      rotatePlaneSimple(view4, 2, 3, rotZWView)
+
+      // Optional 4D view rotations (for delta overlay comparison we disable these).
+      if (include4DViewRotations) {
+        rotatePlaneSimple(view4, 0, 3, rotXWView)
+        rotatePlaneSimple(view4, 1, 3, rotYWView)
+        rotatePlaneSimple(view4, 2, 3, rotZWView)
+      }
 
       // 4D -> 3D perspective (compress along W axis).
       const denomW = clamp(DIST_4D - view4[3], 0.95, 99)
@@ -301,7 +306,15 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
         }
       })
       .sort((a, b) => a.depth - b.depth)
+  }
+
+  const projected = useMemo<ProjectedPoint[]>(() => {
+    return buildProjected(true)
   }, [angles, points, rotXY, rotXZ, rotYZ, rotXWView, rotYWView, rotZWView, zoom])
+
+  const projectedBaseline = useMemo<ProjectedPoint[]>(() => {
+    return buildProjected(false)
+  }, [angles, points, rotXY, rotXZ, rotYZ, zoom])
 
   const edges = useMemo(() => {
     const links: Array<{ from: ProjectedPoint; to: ProjectedPoint; chroma: number }> = []
@@ -314,6 +327,17 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
     }
     return links
   }, [projected])
+
+  const baselineEdges = useMemo(() => {
+    const links: Array<{ from: ProjectedPoint; to: ProjectedPoint }> = []
+    for (let i = 0; i < projectedBaseline.length - 1; i += 1) {
+      links.push({
+        from: projectedBaseline[i],
+        to: projectedBaseline[i + 1],
+      })
+    }
+    return links
+  }, [projectedBaseline])
 
   function setPlaneAngle(key: string, value: number) {
     setAngles((prev) => ({ ...prev, [key]: value }))
@@ -373,6 +397,15 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
         <code>{rotYZ.toFixed(3)} rad</code>
 
         <span className="metric4d-drag-hint">Drag canvas -&gt; XY / XZ</span>
+        <label className="metric-delta-toggle" htmlFor="delta-overlay">
+          <input
+            id="delta-overlay"
+            type="checkbox"
+            checked={showDeltaOverlay}
+            onChange={(e) => setShowDeltaOverlay(e.target.checked)}
+          />
+          Show 4D Delta
+        </label>
       </div>
 
       <div className="metric4d-view-row">
@@ -425,6 +458,20 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
       >
         <rect x={0} y={0} width={WIDTH} height={HEIGHT} fill="transparent" />
 
+        {showDeltaOverlay && baselineEdges.map((edge, index) => (
+          <line
+            key={`base-${edge.from.id}-${edge.to.id}-${index}`}
+            x1={edge.from.x2d}
+            y1={edge.from.y2d}
+            x2={edge.to.x2d}
+            y2={edge.to.y2d}
+            stroke="rgba(148, 156, 191, 0.55)"
+            strokeWidth={0.8}
+            strokeDasharray="2.5 2.4"
+            opacity={0.45}
+          />
+        ))}
+
         {edges.map((edge, index) => {
           const edgeColor = chromaColor(edge.chroma)
           return (
@@ -473,6 +520,18 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             </g>
           )
         })}
+
+        {showDeltaOverlay && projectedBaseline.map((point) => (
+          <circle
+            key={`base-pt-${point.id}`}
+            cx={point.x2d}
+            cy={point.y2d}
+            r={Math.max(1.9, point.radius - 1.15)}
+            fill="rgba(145, 153, 187, 0.24)"
+            stroke="rgba(135, 143, 181, 0.68)"
+            strokeWidth={0.8}
+          />
+        ))}
       </svg>
 
       <div className="metric16d-panel">
