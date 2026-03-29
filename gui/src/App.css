@@ -798,7 +798,7 @@
 
 .metric3d-canvas {
   width: 100%;
-  height: 560px;
+  height: 720px;
   border: 1px solid color-mix(in srgb, var(--line) 85%, white 15%);
   border-radius: 10px;
   background:
@@ -997,7 +997,7 @@
 }
 
 .layout.presentation .metric3d-canvas {
-  height: 680px;
+  height: 860px;
 }
 
 /* ─── Task 19: Reliability & Diagnostics panel ─── */
