@@ -94,6 +94,76 @@
 				"ui_sections": ["Structured Metrics", "Page Curve", "Complexity Trajectory"],
 				"build_checks": ["npm run build", "cargo check"]
 			}
+		},
+		{
+			"id": 10,
+			"title": "Add live run timeline",
+			"status": "completed",
+			"details": "Show simulation phases with active/completed/error states during execution and at completion.",
+			"result": {
+				"ui": "Timeline panel with pending/active/done/error states",
+				"behavior": "Animated step progression during run + result-aware final state mapping",
+				"files": ["gui/src/App.tsx", "gui/src/App.css"]
+			}
+		},
+		{
+			"id": 11,
+			"title": "Add scenario presets and story mode",
+			"status": "completed",
+			"details": "Create one-click simulation scenarios with contextual narrative labels and guided progression.",
+			"result": {
+				"presets": 4,
+				"ui": "Scenario Presets + Story Mode card",
+				"files": ["gui/src/App.tsx", "gui/src/App.css"]
+			}
+		},
+		{
+			"id": 12,
+			"title": "Add 3D metric space view",
+			"status": "pending",
+			"details": "Introduce interactive 3D visualization for geometry and metric relationships."
+		},
+		{
+			"id": 13,
+			"title": "Add comparative run mode",
+			"status": "pending",
+			"details": "Support side-by-side run comparison with metric deltas and highlights."
+		},
+		{
+			"id": 14,
+			"title": "Add export-ready reports",
+			"status": "pending",
+			"details": "Generate shareable reports from run results with charts and metadata."
+		},
+		{
+			"id": 15,
+			"title": "Build parameter studio",
+			"status": "pending",
+			"details": "Add tunable run controls for qubits, scheduling budgets, and compiler/geometry knobs."
+		},
+		{
+			"id": 16,
+			"title": "Expand motion system",
+			"status": "pending",
+			"details": "Introduce meaningful transitions tied to simulation state changes and results."
+		},
+		{
+			"id": 17,
+			"title": "Create design system layer",
+			"status": "pending",
+			"details": "Refactor style tokens into a reusable design-system structure for consistency."
+		},
+		{
+			"id": 18,
+			"title": "Add advanced theme packs",
+			"status": "pending",
+			"details": "Extend theme selector with presentation-ready packs and chart-specific palettes."
+		},
+		{
+			"id": 19,
+			"title": "Add reliability UX panel",
+			"status": "pending",
+			"details": "Expose environment diagnostics, recoverable errors, and guided remediation actions."
 		}
 	]
 }
