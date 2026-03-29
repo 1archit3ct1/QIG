@@ -194,6 +194,8 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
   const [rotYWView, setRotYWView] = useState(0)
   const [rotZWView, setRotZWView] = useState(0)
   const [showDeltaOverlay, setShowDeltaOverlay] = useState(true)
+  const [show8DDelta, setShow8DDelta] = useState(true)
+  const [show16DDelta, setShow16DDelta] = useState(true)
 
   // 16D constrained rotation controls.
   const [angles, setAngles] = useState<Record<string, number>>(() => initialAngles())
@@ -201,9 +203,15 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
   const [isDragging, setIsDragging] = useState(false)
   const dragStart = useRef<{ x: number; y: number; rxy: number; rxz: number } | null>(null)
 
-  const buildProjected = (include4DViewRotations: boolean): ProjectedPoint[] => {
+  const buildProjected = (include4DViewRotations: boolean, dimensionCap: 4 | 8 | 16): ProjectedPoint[] => {
     const raw = points.map((p) => {
       const vec = normalizeVec16(p.v.map((value) => finiteOrZero(value)))
+
+      if (dimensionCap < 16) {
+        for (let i = dimensionCap; i < 16; i += 1) {
+          vec[i] = 0
+        }
+      }
 
       // Base view orientation planes in XYZ.
       rotatePlane(vec, 0, 1, rotXY)
@@ -212,7 +220,9 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
 
       // Constrained higher-dimensional subspace rotations.
       PLANE_LAYOUT.allPlanes.forEach((plane) => {
-        rotatePlane(vec, plane.i, plane.j, angles[plane.key] ?? 0)
+        if (plane.i < dimensionCap && plane.j < dimensionCap) {
+          rotatePlane(vec, plane.i, plane.j, angles[plane.key] ?? 0)
+        }
       })
 
       const { xyzw, chroma } = reduce16To4(vec as Vec16)
@@ -309,12 +319,20 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
   }
 
   const projected = useMemo<ProjectedPoint[]>(() => {
-    return buildProjected(true)
+    return buildProjected(true, 16)
   }, [angles, points, rotXY, rotXZ, rotYZ, rotXWView, rotYWView, rotZWView, zoom])
 
   const projectedBaseline = useMemo<ProjectedPoint[]>(() => {
-    return buildProjected(false)
+    return buildProjected(false, 16)
   }, [angles, points, rotXY, rotXZ, rotYZ, zoom])
+
+  const projected8Ref = useMemo<ProjectedPoint[]>(() => {
+    return buildProjected(true, 8)
+  }, [angles, points, rotXY, rotXZ, rotYZ, rotXWView, rotYWView, rotZWView, zoom])
+
+  const projected4Ref = useMemo<ProjectedPoint[]>(() => {
+    return buildProjected(true, 4)
+  }, [angles, points, rotXY, rotXZ, rotYZ, rotXWView, rotYWView, rotZWView, zoom])
 
   const edges = useMemo(() => {
     const links: Array<{ from: ProjectedPoint; to: ProjectedPoint; chroma: number }> = []
@@ -338,6 +356,50 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
     }
     return links
   }, [projectedBaseline])
+
+  const ref8Edges = useMemo(() => {
+    const links: Array<{ from: ProjectedPoint; to: ProjectedPoint }> = []
+    for (let i = 0; i < projected8Ref.length - 1; i += 1) {
+      links.push({
+        from: projected8Ref[i],
+        to: projected8Ref[i + 1],
+      })
+    }
+    return links
+  }, [projected8Ref])
+
+  const ref4Edges = useMemo(() => {
+    const links: Array<{ from: ProjectedPoint; to: ProjectedPoint }> = []
+    for (let i = 0; i < projected4Ref.length - 1; i += 1) {
+      links.push({
+        from: projected4Ref[i],
+        to: projected4Ref[i + 1],
+      })
+    }
+    return links
+  }, [projected4Ref])
+
+  const byId16 = useMemo(() => new Map(projected.map((p) => [p.id, p])), [projected])
+
+  const delta8Connectors = useMemo(() => {
+    return projected8Ref
+      .map((p8) => {
+        const p16 = byId16.get(p8.id)
+        if (!p16) return null
+        return { from: p8, to: p16 }
+      })
+      .filter((v): v is { from: ProjectedPoint; to: ProjectedPoint } => v !== null)
+  }, [projected8Ref, byId16])
+
+  const delta16Connectors = useMemo(() => {
+    return projected4Ref
+      .map((p4) => {
+        const p16 = byId16.get(p4.id)
+        if (!p16) return null
+        return { from: p4, to: p16 }
+      })
+      .filter((v): v is { from: ProjectedPoint; to: ProjectedPoint } => v !== null)
+  }, [projected4Ref, byId16])
 
   function setPlaneAngle(key: string, value: number) {
     setAngles((prev) => ({ ...prev, [key]: value }))
@@ -406,6 +468,24 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
           />
           Show 4D Delta
         </label>
+        <label className="metric-delta-toggle" htmlFor="delta-overlay-8d">
+          <input
+            id="delta-overlay-8d"
+            type="checkbox"
+            checked={show8DDelta}
+            onChange={(e) => setShow8DDelta(e.target.checked)}
+          />
+          Show 8D Delta
+        </label>
+        <label className="metric-delta-toggle" htmlFor="delta-overlay-16d">
+          <input
+            id="delta-overlay-16d"
+            type="checkbox"
+            checked={show16DDelta}
+            onChange={(e) => setShow16DDelta(e.target.checked)}
+          />
+          Show 16D Delta
+        </label>
       </div>
 
       <div className="metric4d-view-row">
@@ -472,6 +552,60 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
           />
         ))}
 
+        {show8DDelta && ref4Edges.map((edge, index) => (
+          <line
+            key={`ref4-${edge.from.id}-${edge.to.id}-${index}`}
+            x1={edge.from.x2d}
+            y1={edge.from.y2d}
+            x2={edge.to.x2d}
+            y2={edge.to.y2d}
+            stroke="rgba(75, 186, 255, 0.62)"
+            strokeWidth={0.8}
+            strokeDasharray="1.6 2.2"
+            opacity={0.42}
+          />
+        ))}
+
+        {show16DDelta && ref8Edges.map((edge, index) => (
+          <line
+            key={`ref8-${edge.from.id}-${edge.to.id}-${index}`}
+            x1={edge.from.x2d}
+            y1={edge.from.y2d}
+            x2={edge.to.x2d}
+            y2={edge.to.y2d}
+            stroke="rgba(171, 106, 255, 0.6)"
+            strokeWidth={0.8}
+            strokeDasharray="3 2"
+            opacity={0.44}
+          />
+        ))}
+
+        {show8DDelta && delta8Connectors.map((seg, index) => (
+          <line
+            key={`delta8-${seg.from.id}-${index}`}
+            x1={seg.from.x2d}
+            y1={seg.from.y2d}
+            x2={seg.to.x2d}
+            y2={seg.to.y2d}
+            stroke="rgba(75, 186, 255, 0.35)"
+            strokeWidth={0.75}
+            opacity={0.5}
+          />
+        ))}
+
+        {show16DDelta && delta16Connectors.map((seg, index) => (
+          <line
+            key={`delta16-${seg.from.id}-${index}`}
+            x1={seg.from.x2d}
+            y1={seg.from.y2d}
+            x2={seg.to.x2d}
+            y2={seg.to.y2d}
+            stroke="rgba(171, 106, 255, 0.36)"
+            strokeWidth={0.75}
+            opacity={0.52}
+          />
+        ))}
+
         {edges.map((edge, index) => {
           const edgeColor = chromaColor(edge.chroma)
           return (
@@ -532,6 +666,30 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             strokeWidth={0.8}
           />
         ))}
+
+        {show8DDelta && projected4Ref.map((point) => (
+          <circle
+            key={`ref4-pt-${point.id}`}
+            cx={point.x2d}
+            cy={point.y2d}
+            r={Math.max(1.75, point.radius - 1.3)}
+            fill="rgba(75, 186, 255, 0.2)"
+            stroke="rgba(75, 186, 255, 0.58)"
+            strokeWidth={0.8}
+          />
+        ))}
+
+        {show16DDelta && projected8Ref.map((point) => (
+          <circle
+            key={`ref8-pt-${point.id}`}
+            cx={point.x2d}
+            cy={point.y2d}
+            r={Math.max(1.8, point.radius - 1.2)}
+            fill="rgba(171, 106, 255, 0.2)"
+            stroke="rgba(171, 106, 255, 0.58)"
+            strokeWidth={0.8}
+          />
+        ))}
       </svg>
 
       <div className="metric16d-panel">
@@ -586,6 +744,9 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
           <span style={{ color: 'rgb(39,199,255)' }}>chroma low</span>
           <span style={{ color: 'rgb(100,145,255)' }}>chroma mid</span>
           <span style={{ color: 'rgb(168,96,255)' }}>chroma high</span>
+          <span style={{ color: 'rgba(145,153,187,1)' }}>4D delta</span>
+          <span style={{ color: 'rgba(75,186,255,1)' }}>8D delta</span>
+          <span style={{ color: 'rgba(171,106,255,1)' }}>16D delta</span>
         </div>
       </div>
     </div>
