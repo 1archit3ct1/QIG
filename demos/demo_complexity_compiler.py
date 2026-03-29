@@ -224,6 +224,43 @@ def demo_compiler():
         print(f"  t={t:.3f}: {bar} C={C:.2f}")
 
     print()
+
+    # —— RT Formula Checks ——
+    print("─" * 50)
+    print("STEP 4: RT Formula Checks (S_actual / S_predicted)")
+    print("─" * 50)
+
+    from hardware_sim.mera_circuit import MERACircuit
+    from core.holographic_code import HaPPYCode
+
+    ratios = []
+
+    # MERA RT formula checks
+    mera = MERACircuit(n_boundary=16, n_layers=4, G_N=1.0)
+    rt_results = mera.verify_rt_formula()
+    for label, r in rt_results.items():
+        s_actual = r['S_MERA']
+        s_predicted = r['S_RT_formula']
+        ratio = s_actual / s_predicted if s_predicted != 0 else float('inf')
+        ratios.append(ratio)
+        print(f"  MERA {label}: S_actual={s_actual:.4f}, S_predicted={s_predicted:.4f}, ratio={ratio:.6f}")
+
+    # HaPPY Code RT formula checks
+    code = HaPPYCode(n_boundary=16, n_bulk=4, G_N=1.0)
+    for region_size in [2, 4, 6, 8]:
+        region = list(range(region_size))
+        s_predicted, s_actual, rt_ok = code.verify_rt_formula(region)
+        ratio = s_actual / s_predicted if s_predicted != 0 else float('inf')
+        ratios.append(ratio)
+        print(f"  HaPPY region={region_size}: S_actual={s_actual:.4f}, S_predicted={s_predicted:.4f}, ratio={ratio:.6f}")
+
+    # Mean ratio
+    if ratios:
+        mean_ratio = sum(ratios) / len(ratios)
+        print()
+        print(f"  RT Deviation Ratio (actual/predicted): {mean_ratio:.6f}")
+
+    print()
     print("✓ DEMO 4 COMPLETE: Task graph compiled onto QIG geometry.")
 
 
