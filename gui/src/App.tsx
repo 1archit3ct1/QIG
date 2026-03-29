@@ -723,9 +723,12 @@ function App() {
       const d1 = c8 - c4
       const d2 = c16 - c8
       const ratio = d1 / stabilizeMetricDenominator(d2)
+      const scaledT = arr.length > 1
+        ? (index / (arr.length - 1)) * DIVERGENCE_TIMESTEP_MAX
+        : 0
 
       return {
-        t: rawT,
+        t: scaledT,
         c4,
         c8,
         c16,
