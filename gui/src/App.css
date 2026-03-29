@@ -865,6 +865,116 @@
   font-weight: 600;
 }
 
+.divergence-panel {
+  animation: fade-up 820ms ease-out;
+}
+
+.divergence-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+
+.divergence-controls label {
+  font-size: 0.84rem;
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.divergence-controls input[type='range'] {
+  width: 260px;
+  accent-color: var(--accent);
+}
+
+.divergence-controls span {
+  font-family: var(--mono);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.divergence-main-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.7rem;
+}
+
+.mean-ratio-card,
+.ratio-card,
+.d-card {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 0.58rem;
+  background: color-mix(in srgb, var(--panel-strong) 90%, white 10%);
+}
+
+.mean-ratio-card h3,
+.ratio-card h3,
+.d-card h3 {
+  margin: 0 0 0.26rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.mean-ratio-card p {
+  font-size: 1.44rem;
+  font-weight: 800;
+  color: var(--accent);
+  font-family: var(--mono);
+}
+
+.ratio-card p,
+.d-card p {
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--ink);
+}
+
+.divergence-values-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.divergence-values-grid article {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.5rem;
+  background: color-mix(in srgb, var(--panel-strong) 92%, white 8%);
+}
+
+.divergence-values-grid h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.divergence-values-grid p {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.sparkline-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.62rem;
+  background: color-mix(in srgb, var(--panel-strong) 92%, white 8%);
+}
+
+.ratio-sparkline {
+  width: 100%;
+  height: 96px;
+  border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 94%, white 6%);
+}
+
 .compare-head {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1138,6 +1248,18 @@
 
   .compare-head {
     grid-template-columns: 1fr;
+  }
+
+  .divergence-main-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .divergence-values-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .divergence-controls {
+    flex-wrap: wrap;
   }
 
   .layout {

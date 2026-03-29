@@ -22,6 +22,16 @@ type TimelineStep = {
   state: TimelineState
 }
 
+type DivergenceSample = {
+  t: number
+  c4: number
+  c8: number
+  c16: number
+  d1: number
+  d2: number
+  ratio: number
+}
+
 type SimulationParameters = {
   qubits: number
   curvature: number
@@ -254,6 +264,55 @@ function deriveTimelineFromResult(
   }))
 }
 
+function buildComplexityVector16(y: number, index: number, total: number): number[] {
+  const normalizedX = total > 1 ? index / (total - 1) : 0
+  const normalizedY = Number.isFinite(y) ? y : 0
+  const x = normalizedX * 2 - 1
+  const yScaled = Math.tanh(normalizedY / 6)
+  const zWave = Math.sin(normalizedX * Math.PI * 2 + 0.8) * 0.65
+  const wSeries = 1
+  const u = Math.sin((index + 1) * 0.37 + 0.5)
+  const vComp = Math.cos((index + 1) * 0.23 - 0.6)
+  const s = Math.tanh(normalizedY / 8)
+  const tt = Math.sin((normalizedX * 2 - 1) * Math.PI * 1.5)
+  const a = Math.cos((index + 1) * 0.17 + normalizedY * 0.11)
+  const b = Math.sin((index + 1) * 0.14 - 0.9)
+  const c = Math.cos(normalizedX * Math.PI * 4 + normalizedY * 0.06)
+  const d = Math.sin(normalizedY * 0.04 + index * 0.08)
+  const e = Math.tanh((normalizedY - 2) / 9)
+  const f = Math.sin(normalizedX * Math.PI * 3.2)
+  const g = Math.cos(normalizedX * Math.PI * 2.4 + 0.7)
+  const h = Math.sin((index + 1) * 0.09 + normalizedY * 0.02)
+
+  return [
+    x,
+    yScaled,
+    zWave,
+    wSeries,
+    u,
+    vComp,
+    s,
+    tt,
+    a,
+    b,
+    c,
+    d,
+    e,
+    f,
+    g,
+    h,
+  ]
+}
+
+function normPrefix(values: number[], n: number): number {
+  let sum = 0
+  for (let i = 0; i < n; i += 1) {
+    const v = values[i] ?? 0
+    sum += v * v
+  }
+  return Math.sqrt(sum)
+}
+
 function analyzeReliability(result: SimulationResult | null): {
   issues: Array<{ title: string; guidance: string[] }>
   envSummary: Array<{ label: string; value: string }>
@@ -346,6 +405,7 @@ function App() {
   })
   const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>(() => buildTimelineSteps('all'))
   const [presentationMode, setPresentationMode] = useState(false)
+  const [divergenceStep, setDivergenceStep] = useState(0)
 
   const timelineTicker = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -537,6 +597,98 @@ function App() {
 
     return [...fromCharts, ...fromCards].slice(0, 84)
   }, [parsed])
+
+  const divergenceSeries = useMemo<DivergenceSample[]>(() => {
+    if (!parsed) {
+      return []
+    }
+
+    const complexityChart = parsed.charts.find((chart) =>
+      chart.key.toLowerCase().includes('complexity') || chart.title.toLowerCase().includes('complexity'),
+    )
+
+    if (!complexityChart || complexityChart.points.length === 0) {
+      return []
+    }
+
+    return complexityChart.points.map((point, index, arr) => {
+      const vec16 = buildComplexityVector16(point.y, index, arr.length)
+      const c4 = normPrefix(vec16, 4)
+      const c8 = normPrefix(vec16, 8)
+      const c16 = normPrefix(vec16, 16)
+      const d1 = c8 - c4
+      const d2 = c16 - c8
+      const ratio = d1 / d2
+
+      return {
+        t: point.x,
+        c4,
+        c8,
+        c16,
+        d1,
+        d2,
+        ratio,
+      }
+    })
+  }, [parsed])
+
+  const meanRatio = useMemo(() => {
+    if (divergenceSeries.length === 0) {
+      return NaN
+    }
+    const total = divergenceSeries.reduce((sum, sample) => sum + sample.ratio, 0)
+    return total / divergenceSeries.length
+  }, [divergenceSeries])
+
+  const currentDivergence = useMemo(() => {
+    if (divergenceSeries.length === 0) {
+      return null
+    }
+    const idx = Math.min(Math.max(divergenceStep, 0), divergenceSeries.length - 1)
+    return divergenceSeries[idx]
+  }, [divergenceSeries, divergenceStep])
+
+  const ratioSparklinePath = useMemo(() => {
+    if (divergenceSeries.length < 2) {
+      return ''
+    }
+
+    const width = 540
+    const height = 88
+    const pad = 8
+
+    const ratios = divergenceSeries.map((sample) => sample.ratio)
+    const finiteRatios = ratios.filter((v) => Number.isFinite(v))
+    if (finiteRatios.length === 0) {
+      return ''
+    }
+
+    const min = Math.min(...finiteRatios)
+    const max = Math.max(...finiteRatios)
+    const span = Math.max(max - min, 1e-9)
+
+    let path = ''
+    for (let i = 0; i < ratios.length; i += 1) {
+      const value = ratios[i]
+      if (!Number.isFinite(value)) {
+        continue
+      }
+
+      const x = pad + (i / (ratios.length - 1)) * (width - pad * 2)
+      const yNorm = (value - min) / span
+      const y = height - pad - yNorm * (height - pad * 2)
+      path += path === '' ? `M ${x} ${y}` : ` L ${x} ${y}`
+    }
+    return path
+  }, [divergenceSeries])
+
+  useEffect(() => {
+    if (divergenceSeries.length === 0) {
+      setDivergenceStep(0)
+      return
+    }
+    setDivergenceStep(divergenceSeries.length - 1)
+  }, [divergenceSeries])
 
   const reliabilityData = useMemo(() => analyzeReliability(result), [result])
 
@@ -939,6 +1091,97 @@ function App() {
           <MetricSpaceView points={metricPoints} />
         ) : (
           <p className="hint">Run a simulation to populate 16D-compressed 4D view points.</p>
+        )}
+      </section>
+
+      <section className="panel divergence-panel">
+        <div className="label-row">
+          <h2>Dimensional Divergence Analyzer</h2>
+          <span className="hint">Raw divergence metrics from C4, C8, C16 trajectories</span>
+        </div>
+
+        {divergenceSeries.length === 0 && (
+          <p className="hint">Run a simulation with complexity trajectory output to populate divergence analytics.</p>
+        )}
+
+        {divergenceSeries.length > 0 && currentDivergence && (
+          <>
+            <div className="divergence-controls">
+              <label htmlFor="divergence-step">Timestep t</label>
+              <input
+                id="divergence-step"
+                type="range"
+                min={0}
+                max={divergenceSeries.length - 1}
+                step={1}
+                value={Math.min(divergenceStep, divergenceSeries.length - 1)}
+                onChange={(e) => setDivergenceStep(Number.parseInt(e.target.value, 10) || 0)}
+              />
+              <span>
+                t = {currentDivergence.t}
+              </span>
+            </div>
+
+            <div className="divergence-main-grid">
+              <article className="mean-ratio-card">
+                <h3>Mean Ratio</h3>
+                <p>{Number.isFinite(meanRatio) ? meanRatio.toFixed(6) : String(meanRatio)}</p>
+              </article>
+
+              <article className="ratio-card">
+                <h3>Current Ratio(t)</h3>
+                <p>{Number.isFinite(currentDivergence.ratio) ? currentDivergence.ratio.toFixed(6) : String(currentDivergence.ratio)}</p>
+              </article>
+
+              <article className="d-card">
+                <h3>D1(t) = C8 - C4</h3>
+                <p>{currentDivergence.d1.toFixed(6)}</p>
+              </article>
+
+              <article className="d-card">
+                <h3>D2(t) = C16 - C8</h3>
+                <p>{currentDivergence.d2.toFixed(6)}</p>
+              </article>
+            </div>
+
+            <div className="divergence-values-grid">
+              <article>
+                <h3>C4(t)</h3>
+                <p>{currentDivergence.c4.toFixed(6)}</p>
+              </article>
+              <article>
+                <h3>C8(t)</h3>
+                <p>{currentDivergence.c8.toFixed(6)}</p>
+              </article>
+              <article>
+                <h3>C16(t)</h3>
+                <p>{currentDivergence.c16.toFixed(6)}</p>
+              </article>
+              <article>
+                <h3>C8 - C4</h3>
+                <p>{(currentDivergence.c8 - currentDivergence.c4).toFixed(6)}</p>
+              </article>
+              <article>
+                <h3>C16 - C8</h3>
+                <p>{(currentDivergence.c16 - currentDivergence.c8).toFixed(6)}</p>
+              </article>
+              <article>
+                <h3>C16 - C4</h3>
+                <p>{(currentDivergence.c16 - currentDivergence.c4).toFixed(6)}</p>
+              </article>
+            </div>
+
+            <article className="sparkline-card">
+              <div className="label-row compact">
+                <h3>Ratio(t) Sparkline</h3>
+                <span className="hint">Raw unnormalized series</span>
+              </div>
+              <svg className="ratio-sparkline" viewBox="0 0 540 88" role="img" aria-label="Ratio over time sparkline">
+                <rect x={0} y={0} width={540} height={88} rx={10} ry={10} fill="transparent" />
+                <path d={ratioSparklinePath} fill="none" stroke="var(--accent)" strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </article>
+          </>
         )}
       </section>
 
