@@ -559,7 +559,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             y1={edge.from.y2d}
             x2={edge.to.x2d}
             y2={edge.to.y2d}
-            stroke="rgba(75, 186, 255, 0.62)"
+            stroke="rgba(255, 56, 56, 0.72)"
             strokeWidth={0.8}
             strokeDasharray="1.6 2.2"
             opacity={0.42}
@@ -573,7 +573,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             y1={edge.from.y2d}
             x2={edge.to.x2d}
             y2={edge.to.y2d}
-            stroke="rgba(171, 106, 255, 0.6)"
+            stroke="rgba(0, 255, 65, 0.72)"
             strokeWidth={0.8}
             strokeDasharray="3 2"
             opacity={0.44}
@@ -587,7 +587,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             y1={seg.from.y2d}
             x2={seg.to.x2d}
             y2={seg.to.y2d}
-            stroke="rgba(75, 186, 255, 0.35)"
+            stroke="rgba(255, 56, 56, 0.45)"
             strokeWidth={0.75}
             opacity={0.5}
           />
@@ -600,7 +600,7 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             y1={seg.from.y2d}
             x2={seg.to.x2d}
             y2={seg.to.y2d}
-            stroke="rgba(171, 106, 255, 0.36)"
+            stroke="rgba(0, 255, 65, 0.46)"
             strokeWidth={0.75}
             opacity={0.52}
           />
@@ -673,8 +673,8 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             cx={point.x2d}
             cy={point.y2d}
             r={Math.max(1.75, point.radius - 1.3)}
-            fill="rgba(75, 186, 255, 0.2)"
-            stroke="rgba(75, 186, 255, 0.58)"
+            fill="rgba(255, 56, 56, 0.24)"
+            stroke="rgba(255, 56, 56, 0.74)"
             strokeWidth={0.8}
           />
         ))}
@@ -685,8 +685,8 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
             cx={point.x2d}
             cy={point.y2d}
             r={Math.max(1.8, point.radius - 1.2)}
-            fill="rgba(171, 106, 255, 0.2)"
-            stroke="rgba(171, 106, 255, 0.58)"
+            fill="rgba(0, 255, 65, 0.22)"
+            stroke="rgba(0, 255, 65, 0.74)"
             strokeWidth={0.8}
           />
         ))}
@@ -745,8 +745,8 @@ export default function MetricSpaceView({ points }: MetricSpaceViewProps) {
           <span style={{ color: 'rgb(100,145,255)' }}>chroma mid</span>
           <span style={{ color: 'rgb(168,96,255)' }}>chroma high</span>
           <span style={{ color: 'rgba(145,153,187,1)' }}>4D delta</span>
-          <span style={{ color: 'rgba(75,186,255,1)' }}>8D delta</span>
-          <span style={{ color: 'rgba(171,106,255,1)' }}>16D delta</span>
+          <span style={{ color: 'rgba(255,56,56,1)' }}>8D delta</span>
+          <span style={{ color: 'rgba(0,255,65,1)' }}>16D delta</span>
         </div>
       </div>
     </div>
