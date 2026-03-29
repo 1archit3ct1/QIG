@@ -127,8 +127,20 @@
   animation: fade-up 620ms ease-out;
 }
 
+.compare-panel {
+  animation: fade-up 820ms ease-out;
+}
+
+.report-panel {
+  animation: fade-up 860ms ease-out;
+}
+
 .parsed-panel {
   animation: fade-up 700ms ease-out;
+}
+
+.metric3d-panel {
+  animation: fade-up 760ms ease-out;
 }
 
 .timeline-panel {
@@ -236,6 +248,42 @@
 
 .preset-block {
   margin-top: 0.9rem;
+}
+
+.parameter-studio {
+  margin-top: 0.8rem;
+}
+
+.param-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.param-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.46rem 0.52rem;
+  background: color-mix(in srgb, var(--panel-strong) 90%, white 10%);
+}
+
+.param-grid span {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.param-grid input {
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, black 20%);
+  border-radius: 8px;
+  padding: 0.34rem 0.42rem;
+  font-family: var(--mono);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel-strong) 85%, white 15%);
 }
 
 .preset-grid {
@@ -403,6 +451,39 @@
   font-weight: 700;
 }
 
+.output-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mini-button {
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel-strong) 86%, white 14%);
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 0.26rem 0.62rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mini-button:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.mini-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.report-actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
 .status.ok {
   background: var(--ok-bg);
   color: var(--ok-fg);
@@ -497,6 +578,112 @@
   height: 260px;
 }
 
+.metric3d-wrap {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-strong) 90%, white 10%);
+  padding: 0.65rem;
+}
+
+.metric3d-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+.metric3d-toolbar input[type='range'] {
+  width: 170px;
+  accent-color: var(--accent);
+}
+
+.metric3d-canvas {
+  width: 100%;
+  height: 340px;
+  border: 1px solid color-mix(in srgb, var(--line) 85%, white 15%);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 18% 22%, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 34%),
+    radial-gradient(circle at 82% 78%, color-mix(in srgb, var(--accent-3) 10%, transparent) 0%, transparent 29%),
+    color-mix(in srgb, var(--panel-strong) 92%, #ffffff 8%);
+  cursor: grab;
+}
+
+.metric3d-canvas.dragging {
+  cursor: grabbing;
+}
+
+.metric3d-label {
+  font-size: 10px;
+  fill: var(--ink-soft);
+  font-weight: 600;
+}
+
+.compare-head {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.8rem;
+}
+
+.compare-head article {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel-strong) 88%, white 12%);
+  padding: 0.65rem;
+}
+
+.compare-head h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.compare-head p {
+  margin: 0 0 0.36rem;
+}
+
+.delta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.delta-card {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--panel-strong) 90%, white 10%);
+  padding: 0.58rem;
+}
+
+.delta-card h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.delta-card p {
+  margin: 0 0 0.2rem;
+  color: var(--ink);
+  font-size: 0.84rem;
+}
+
+.delta {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.delta.up {
+  color: var(--ok-fg);
+}
+
+.delta.down {
+  color: var(--fail-fg);
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;
@@ -517,6 +704,10 @@
     grid-template-columns: 1fr;
   }
 
+  .param-grid {
+    grid-template-columns: 1fr;
+  }
+
   .meta-grid {
     grid-template-columns: 1fr;
   }
@@ -529,7 +720,15 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .delta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .charts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-head {
     grid-template-columns: 1fr;
   }
 

@@ -120,26 +120,46 @@
 		{
 			"id": 12,
 			"title": "Add 3D metric space view",
-			"status": "pending",
-			"details": "Introduce interactive 3D visualization for geometry and metric relationships."
+			"status": "completed",
+			"details": "Introduce interactive 3D visualization for geometry and metric relationships.",
+			"result": {
+				"component": "gui/src/MetricSpaceView.tsx",
+				"interaction": ["drag rotate", "zoom slider"],
+				"integration": "3D Metric Space panel in gui/src/App.tsx"
+			}
 		},
 		{
 			"id": 13,
 			"title": "Add comparative run mode",
-			"status": "pending",
-			"details": "Support side-by-side run comparison with metric deltas and highlights."
+			"status": "completed",
+			"details": "Support side-by-side run comparison with metric deltas and highlights.",
+			"result": {
+				"mode": "Baseline snapshot vs current run",
+				"ui": ["Set As Baseline action", "Comparative Run panel", "metric delta cards"],
+				"files": ["gui/src/App.tsx", "gui/src/App.css"]
+			}
 		},
 		{
 			"id": 14,
 			"title": "Add export-ready reports",
-			"status": "pending",
-			"details": "Generate shareable reports from run results with charts and metadata."
+			"status": "completed",
+			"details": "Generate shareable reports from run results with charts and metadata.",
+			"result": {
+				"exports": ["JSON report", "charts CSV"],
+				"ui": "Export Reports panel",
+				"files": ["gui/src/App.tsx", "gui/src/App.css"]
+			}
 		},
 		{
 			"id": 15,
 			"title": "Build parameter studio",
-			"status": "pending",
-			"details": "Add tunable run controls for qubits, scheduling budgets, and compiler/geometry knobs."
+			"status": "completed",
+			"details": "Add tunable run controls for qubits, scheduling budgets, and compiler/geometry knobs.",
+			"result": {
+				"controls": ["qubits", "curvature", "complexityBudget", "energyRate"],
+				"bridge": "Tauri run_simulation now accepts parameters payload and forwards env vars",
+				"files": ["gui/src/App.tsx", "gui/src/App.css", "gui/src-tauri/src/lib.rs"]
+			}
 		},
 		{
 			"id": 16,

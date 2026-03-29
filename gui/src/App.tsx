@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts'
 import { parseSimulationOutput, type SimulationId } from './outputParser'
+import MetricSpaceView, { type MetricPoint3D } from './MetricSpaceView'
 import './App.css'
 
 type UiTheme = 'runway-tech' | 'utility-street' | 'cyber-minimal'
@@ -19,6 +20,25 @@ type TimelineStep = {
   id: number
   label: string
   state: TimelineState
+}
+
+type SimulationParameters = {
+  qubits: number
+  curvature: number
+  complexityBudget: number
+  energyRate: number
+}
+
+function downloadTextFile(filename: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
 }
 
 type ScenarioPreset = {
@@ -225,7 +245,14 @@ function App() {
   const [preferLinux, setPreferLinux] = useState(true)
   const [isRunning, setIsRunning] = useState(false)
   const [result, setResult] = useState<SimulationResult | null>(null)
+  const [baselineResult, setBaselineResult] = useState<SimulationResult | null>(null)
   const [errorText, setErrorText] = useState('')
+  const [parameters, setParameters] = useState<SimulationParameters>({
+    qubits: 8,
+    curvature: -1,
+    complexityBudget: 200,
+    energyRate: 100,
+  })
   const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>(() => buildTimelineSteps('all'))
 
   const timelineTicker = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -247,7 +274,134 @@ function App() {
     return parseSimulationOutput(result.simulation, result.stdout)
   }, [result])
 
+  const baselineParsed = useMemo(() => {
+    if (!baselineResult) {
+      return null
+    }
+    return parseSimulationOutput(baselineResult.simulation, baselineResult.stdout)
+  }, [baselineResult])
+
   const chartColors = CHART_COLORS[theme]
+
+  const metricDeltas = useMemo(() => {
+    if (!parsed || !baselineParsed) {
+      return [] as Array<{ label: string; baseline: number; current: number; delta: number }>
+    }
+
+    const baselineMap = new Map<string, number>()
+    baselineParsed.cards.forEach((card) => {
+      const n = Number.parseFloat(card.value.replace(/[^0-9.-]/g, ''))
+      if (Number.isFinite(n)) {
+        baselineMap.set(card.label, n)
+      }
+    })
+
+    return parsed.cards
+      .map((card) => {
+        const current = Number.parseFloat(card.value.replace(/[^0-9.-]/g, ''))
+        const baseline = baselineMap.get(card.label)
+        if (!Number.isFinite(current) || baseline === undefined) {
+          return null
+        }
+        return {
+          label: card.label,
+          baseline,
+          current,
+          delta: current - baseline,
+        }
+      })
+      .filter((v): v is { label: string; baseline: number; current: number; delta: number } => v !== null)
+      .slice(0, 8)
+  }, [parsed, baselineParsed])
+
+  function exportReportJson() {
+    if (!result || !parsed) {
+      return
+    }
+
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      simulation: result.simulation,
+      command: result.command,
+      exitCode: result.exit_code,
+      success: result.success,
+      metrics: parsed.cards,
+      charts: parsed.charts,
+      baseline: baselineResult
+        ? {
+            simulation: baselineResult.simulation,
+            exitCode: baselineResult.exit_code,
+            success: baselineResult.success,
+            metricDeltas,
+            parameters,
+          }
+        : null,
+      parameters,
+    }
+
+    downloadTextFile(
+      `qig-report-${result.simulation}-${Date.now()}.json`,
+      JSON.stringify(payload, null, 2),
+      'application/json',
+    )
+  }
+
+  function exportChartCsv() {
+    if (!parsed || parsed.charts.length === 0) {
+      return
+    }
+
+    const rows: string[] = ['chart_key,chart_title,x,y']
+    parsed.charts.forEach((chart) => {
+      chart.points.forEach((point) => {
+        rows.push(`${chart.key},"${chart.title.replace(/"/g, '""')}",${point.x},${point.y}`)
+      })
+    })
+
+    downloadTextFile(
+      `qig-chart-data-${Date.now()}.csv`,
+      rows.join('\n'),
+      'text/csv;charset=utf-8',
+    )
+  }
+
+  const metricPoints = useMemo<MetricPoint3D[]>(() => {
+    if (!parsed) {
+      return []
+    }
+
+    const fromCharts: MetricPoint3D[] = []
+    parsed.charts.slice(0, 2).forEach((chart, chartIndex) => {
+      chart.points.slice(0, 42).forEach((point, pointIndex) => {
+        const normalizedX = chart.points.length > 1 ? pointIndex / (chart.points.length - 1) : 0
+        const normalizedY = Number.isFinite(point.y) ? point.y : 0
+        const yScaled = Math.tanh(normalizedY / 6)
+        const zWave = Math.sin(normalizedX * Math.PI * 2 + chartIndex * 0.8) * 0.65
+
+        fromCharts.push({
+          id: `chart-${chartIndex}-${pointIndex}`,
+          x: normalizedX * 2 - 1,
+          y: yScaled,
+          z: zWave,
+          label: `${chart.title} #${pointIndex}`,
+        })
+      })
+    })
+
+    const fromCards: MetricPoint3D[] = parsed.cards.slice(0, 18).map((card, index) => {
+      const numeric = Number.parseFloat(card.value.replace(/[^0-9.-]/g, ''))
+      const base = Number.isFinite(numeric) ? numeric : index + 1
+      return {
+        id: `card-${index}`,
+        x: Math.sin(index * 0.68),
+        y: Math.cos(index * 0.52) * 0.78,
+        z: Math.tanh(base / 12) * (index % 2 === 0 ? 1 : -1),
+        label: card.label,
+      }
+    })
+
+    return [...fromCharts, ...fromCards].slice(0, 84)
+  }, [parsed])
 
   function applyPreset(preset: ScenarioPreset) {
     setSelectedPresetId(preset.id)
@@ -305,6 +459,7 @@ function App() {
       const data = await invoke<SimulationResult>('run_simulation', {
         simulation: selected,
         preferLinux,
+        parameters,
       })
       setResult(data)
       setTimelineSteps((current) => deriveTimelineFromResult(selected, data.stdout, data.success, current))
@@ -403,6 +558,80 @@ function App() {
           Prefer Linux simulation path (WSL + .venv-linux)
         </label>
 
+        <div className="parameter-studio">
+          <div className="label-row compact">
+            <h2>Parameter Studio</h2>
+            <span className="hint">Run tuning controls</span>
+          </div>
+
+          <div className="param-grid">
+            <label>
+              <span>Qubits</span>
+              <input
+                type="number"
+                min={2}
+                max={32}
+                value={parameters.qubits}
+                onChange={(e) =>
+                  setParameters((prev) => ({
+                    ...prev,
+                    qubits: Number.parseInt(e.target.value || '0', 10) || 8,
+                  }))
+                }
+              />
+            </label>
+
+            <label>
+              <span>Curvature</span>
+              <input
+                type="number"
+                step={0.1}
+                min={-10}
+                max={-0.1}
+                value={parameters.curvature}
+                onChange={(e) =>
+                  setParameters((prev) => ({
+                    ...prev,
+                    curvature: Number.parseFloat(e.target.value || '-1') || -1,
+                  }))
+                }
+              />
+            </label>
+
+            <label>
+              <span>Complexity Budget</span>
+              <input
+                type="number"
+                min={10}
+                step={10}
+                value={parameters.complexityBudget}
+                onChange={(e) =>
+                  setParameters((prev) => ({
+                    ...prev,
+                    complexityBudget: Number.parseFloat(e.target.value || '200') || 200,
+                  }))
+                }
+              />
+            </label>
+
+            <label>
+              <span>Energy Rate</span>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={parameters.energyRate}
+                onChange={(e) =>
+                  setParameters((prev) => ({
+                    ...prev,
+                    energyRate: Number.parseFloat(e.target.value || '100') || 100,
+                  }))
+                }
+              />
+            </label>
+          </div>
+        </div>
+
         <button
           className="run-button"
           type="button"
@@ -439,11 +668,22 @@ function App() {
       <section className="panel output-panel">
         <div className="label-row">
           <h2>Execution Output</h2>
-          {result && (
-            <span className={result.success ? 'status ok' : 'status fail'}>
-              Exit {result.exit_code}
-            </span>
-          )}
+          <div className="output-actions">
+            {result && (
+              <span className={result.success ? 'status ok' : 'status fail'}>
+                Exit {result.exit_code}
+              </span>
+            )}
+            {result && (
+              <button
+                type="button"
+                className="mini-button"
+                onClick={() => setBaselineResult(result)}
+              >
+                Set As Baseline
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="meta-grid">
@@ -536,6 +776,100 @@ function App() {
             </div>
           </>
         )}
+      </section>
+
+      <section className="panel metric3d-panel">
+        <div className="label-row">
+          <h2>3D Metric Space</h2>
+          <span className="hint">Drag to rotate, zoom to inspect geometric structure</span>
+        </div>
+
+        {metricPoints.length > 0 ? (
+          <MetricSpaceView points={metricPoints} />
+        ) : (
+          <p className="hint">Run a simulation to populate 3D metric points.</p>
+        )}
+      </section>
+
+      <section className="panel compare-panel">
+        <div className="label-row">
+          <h2>Comparative Run Mode</h2>
+          <span className="hint">Compare current run against baseline snapshots</span>
+        </div>
+
+        {!baselineResult && (
+          <p className="hint">Run a simulation, then click Set As Baseline to begin comparison.</p>
+        )}
+
+        {baselineResult && (
+          <>
+            <div className="compare-head">
+              <article>
+                <h3>Baseline</h3>
+                <p>{baselineResult.simulation}</p>
+                <span className={baselineResult.success ? 'status ok' : 'status fail'}>
+                  Exit {baselineResult.exit_code}
+                </span>
+              </article>
+              <article>
+                <h3>Current</h3>
+                <p>{result?.simulation ?? 'no current run'}</p>
+                {result ? (
+                  <span className={result.success ? 'status ok' : 'status fail'}>
+                    Exit {result.exit_code}
+                  </span>
+                ) : (
+                  <span className="status">Pending</span>
+                )}
+              </article>
+            </div>
+
+            <div className="delta-grid">
+              {metricDeltas.length > 0 ? (
+                metricDeltas.map((deltaItem) => (
+                  <article className="delta-card" key={deltaItem.label}>
+                    <h3>{deltaItem.label}</h3>
+                    <p>
+                      {deltaItem.baseline.toFixed(3)} → {deltaItem.current.toFixed(3)}
+                    </p>
+                    <span className={deltaItem.delta >= 0 ? 'delta up' : 'delta down'}>
+                      {deltaItem.delta >= 0 ? '+' : ''}
+                      {deltaItem.delta.toFixed(3)}
+                    </span>
+                  </article>
+                ))
+              ) : (
+                <p className="hint">Run a second compatible simulation to compute metric deltas.</p>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="panel report-panel">
+        <div className="label-row">
+          <h2>Export Reports</h2>
+          <span className="hint">Download shareable run artifacts</span>
+        </div>
+
+        <div className="report-actions">
+          <button
+            type="button"
+            className="mini-button"
+            onClick={exportReportJson}
+            disabled={!result || !parsed}
+          >
+            Export JSON Report
+          </button>
+          <button
+            type="button"
+            className="mini-button"
+            onClick={exportChartCsv}
+            disabled={!parsed || parsed.charts.length === 0}
+          >
+            Export Charts CSV
+          </button>
+        </div>
       </section>
     </main>
   )

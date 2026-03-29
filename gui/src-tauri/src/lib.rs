@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -10,6 +10,34 @@ struct SimulationOutput {
   success: bool,
   stdout: String,
   stderr: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SimulationParameters {
+  qubits: Option<u32>,
+  curvature: Option<f64>,
+  complexity_budget: Option<f64>,
+  energy_rate: Option<f64>,
+}
+
+fn parameter_env_pairs(parameters: &Option<SimulationParameters>) -> Vec<(String, String)> {
+  let mut pairs = vec![];
+  if let Some(p) = parameters {
+    if let Some(value) = p.qubits {
+      pairs.push(("QIG_PARAM_QUBITS".to_string(), value.to_string()));
+    }
+    if let Some(value) = p.curvature {
+      pairs.push(("QIG_PARAM_CURVATURE".to_string(), value.to_string()));
+    }
+    if let Some(value) = p.complexity_budget {
+      pairs.push(("QIG_PARAM_COMPLEXITY_BUDGET".to_string(), value.to_string()));
+    }
+    if let Some(value) = p.energy_rate {
+      pairs.push(("QIG_PARAM_ENERGY_RATE".to_string(), value.to_string()));
+    }
+  }
+  pairs
 }
 
 fn simulation_script(simulation: &str) -> Option<&'static str> {
@@ -55,12 +83,26 @@ fn to_wsl_path(path: &Path) -> String {
   }
 }
 
-fn run_linux(script: &str, root: &Path) -> Result<(String, String, i32, String), String> {
+fn run_linux(
+  script: &str,
+  root: &Path,
+  parameters: &Option<SimulationParameters>,
+) -> Result<(String, String, i32, String), String> {
   let root_linux = to_wsl_path(root);
   let root_escaped = shell_escape_single_quoted(&root_linux);
   let script_escaped = shell_escape_single_quoted(script);
+  let env_exports = parameter_env_pairs(parameters)
+    .into_iter()
+    .map(|(k, v)| format!("export {k}='{}'", shell_escape_single_quoted(&v)))
+    .collect::<Vec<_>>()
+    .join(" && ");
+  let env_prefix = if env_exports.is_empty() {
+    String::new()
+  } else {
+    format!("{env_exports} && ")
+  };
   let cmd = format!(
-    "cd '{root_escaped}' && source .venv-linux/bin/activate && python3 '{script_escaped}'"
+    "{env_prefix}cd '{root_escaped}' && source .venv-linux/bin/activate && python3 '{script_escaped}'"
   );
 
   let output = Command::new("wsl")
@@ -77,9 +119,14 @@ fn run_linux(script: &str, root: &Path) -> Result<(String, String, i32, String),
   ))
 }
 
-fn run_native(script: &str, root: &Path) -> Result<(String, String, i32, String), String> {
+fn run_native(
+  script: &str,
+  root: &Path,
+  parameters: &Option<SimulationParameters>,
+) -> Result<(String, String, i32, String), String> {
   let venv_python = root.join(".venv").join("Scripts").join("python.exe");
   let script_path = root.join(script);
+  let env_pairs = parameter_env_pairs(parameters);
 
   let (cmd_display, mut cmd) = if venv_python.exists() {
     let mut c = Command::new(&venv_python);
@@ -93,6 +140,10 @@ fn run_native(script: &str, root: &Path) -> Result<(String, String, i32, String)
     c.arg(&script_path).current_dir(root);
     (format!("python {}", script), c)
   };
+
+  for (key, value) in env_pairs {
+    cmd.env(key, value);
+  }
 
   let output = cmd
     .output()
@@ -113,16 +164,20 @@ fn list_simulations() -> Vec<&'static str> {
 }
 
 #[tauri::command]
-fn run_simulation(simulation: String, prefer_linux: bool) -> Result<SimulationOutput, String> {
+fn run_simulation(
+  simulation: String,
+  prefer_linux: bool,
+  parameters: Option<SimulationParameters>,
+) -> Result<SimulationOutput, String> {
   let script = simulation_script(&simulation)
     .ok_or_else(|| format!("unknown simulation '{simulation}'"))?;
   let root = repo_root();
 
   let run_result = if prefer_linux {
-    match run_linux(script, &root) {
+    match run_linux(script, &root, &parameters) {
       Ok(result) => Ok(result),
       Err(linux_err) => {
-        let native = run_native(script, &root)?;
+        let native = run_native(script, &root, &parameters)?;
         let combined_stderr = format!(
           "Linux run failed, fell back to native Python: {linux_err}\n\n{}",
           native.1
@@ -131,7 +186,7 @@ fn run_simulation(simulation: String, prefer_linux: bool) -> Result<SimulationOu
       }
     }
   } else {
-    run_native(script, &root)
+    run_native(script, &root, &parameters)
   }?;
 
   Ok(SimulationOutput {
