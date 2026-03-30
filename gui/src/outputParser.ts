@@ -25,10 +25,13 @@ export type ParsedSimulationOutput = {
 
 export type ComplexityMetrics = {
   totalComplexity: number | null
-  dcdt: number | null
-  lloydFraction: number | null
+  dcdt: number | null              // dC/dt_wall
+  dcdtTau: number | null           // dC/dτ_QIG
+  lloydFraction: number | null     // Execution Lloyd Efficiency
+  intrinsicEfficiency: number | null  // Intrinsic Lloyd Efficiency (should be ~1.0)
   bulkVolume: number | null
   meanDcdt: number | null
+  tauQig: number | null            // τ_QIG - QIG proper time
 }
 
 export type ComplexityRateSample = {
@@ -105,28 +108,36 @@ function parseComplexityTrajectory(stdout: string): MetricPoint[] {
 }
 
 export function parseComplexityMetrics(stdout: string): ComplexityMetrics | null {
-  const totalComplexity = extractLastFloat(/Total complexity C\(t\):\s*([0-9]+\.?[0-9]*)/g, stdout)
-  const dcdt = extractLastFloat(/Complexity growth rate dC\/dt:\s*([0-9]+\.?[0-9]*)/g, stdout)
-  const lloydFraction = extractLastPercent(/Efficiency \(Lloyd fraction\):\s*([0-9]+\.?[0-9]*)%/g, stdout)
-  const bulkVolume = extractLastFloat(/Bulk volume V = C\*G_N\*l:\s*([0-9]+\.?[0-9]*)/g, stdout)
-  const meanDcdt = extractLastFloat(/Mean dC\/dt over simulation:\s*([0-9]+\.?[0-9]*)/g, stdout)
+  // Parse SCALAR_METRIC tagged format (preferred)
+  const totalComplexity = extractFloat(/SCALAR_METRIC:\s*total_complexity=([0-9]+\.?[0-9]*)/, stdout)
+  const dcdt = extractFloat(/SCALAR_METRIC:\s*dcdt_wall=([0-9]+\.?[0-9]*)/, stdout)
+  const dcdtTau = extractFloat(/SCALAR_METRIC:\s*dcdt_tau=([0-9]+\.?[0-9]*)/, stdout)
+  const lloydFraction = extractFloat(/SCALAR_METRIC:\s*lloyd_fraction=([0-9]+\.?[0-9]*)/, stdout)
+  const intrinsicEfficiency = extractFloat(/SCALAR_METRIC:\s*intrinsic_efficiency=([0-9]+\.?[0-9]*)/, stdout)
+  const bulkVolume = extractFloat(/SCALAR_METRIC:\s*bulk_volume=([0-9]+\.?[0-9]*)/, stdout)
+  const meanDcdt = extractFloat(/SCALAR_METRIC:\s*mean_dcdt=([0-9]+\.?[0-9]*)/, stdout)
+  const tauQig = extractFloat(/SCALAR_METRIC:\s*tau_qig=([0-9]+\.?[0-9]*)/, stdout)
+
+  // Fallback to old format if no SCALAR_METRIC tags found
+  const fallbackTotalComplexity = extractLastFloat(/Total complexity C\(t\):\s*([0-9]+\.?[0-9]*)/g, stdout)
+  const fallbackDcdt = extractLastFloat(/Complexity growth rate dC\/dt:\s*([0-9]+\.?[0-9]*)/g, stdout)
+  const fallbackLloydFraction = extractLastPercent(/Efficiency \(Lloyd fraction\):\s*([0-9]+\.?[0-9]*)%/g, stdout)
+  const fallbackBulkVolume = extractLastFloat(/Bulk volume V = C\*G_N\*l:\s*([0-9]+\.?[0-9]*)/g, stdout)
 
   const gateMatches = Array.from(
     stdout.matchAll(/C=([0-9]+\.?[0-9]*),\s*dC\/dt=([0-9]+\.?[0-9]*),\s*Lloyd=([0-9]+\.?[0-9]*)%(?:,\s*V=([0-9]+\.?[0-9]*))?/g),
   )
   const latestGate = gateMatches.length > 0 ? gateMatches[gateMatches.length - 1] : null
 
-  const fallbackTotalComplexity = latestGate ? Number.parseFloat(latestGate[1]) : null
-  const fallbackDcdt = latestGate ? Number.parseFloat(latestGate[2]) : null
-  const fallbackLloydFraction = latestGate ? Number.parseFloat(latestGate[3]) / 100 : null
-  const fallbackBulkVolume = latestGate?.[4] ? Number.parseFloat(latestGate[4]) : null
-
   const metrics: ComplexityMetrics = {
-    totalComplexity: totalComplexity ?? fallbackTotalComplexity,
-    dcdt: dcdt ?? fallbackDcdt,
-    lloydFraction: lloydFraction ?? fallbackLloydFraction,
-    bulkVolume: bulkVolume ?? fallbackBulkVolume,
+    totalComplexity: totalComplexity ?? fallbackTotalComplexity ?? (latestGate ? Number.parseFloat(latestGate[1]) : null),
+    dcdt: dcdt ?? fallbackDcdt ?? (latestGate ? Number.parseFloat(latestGate[2]) : null),
+    dcdtTau: dcdtTau,
+    lloydFraction: lloydFraction ?? fallbackLloydFraction ?? (latestGate ? Number.parseFloat(latestGate[3]) / 100 : null),
+    intrinsicEfficiency: intrinsicEfficiency,
+    bulkVolume: bulkVolume ?? fallbackBulkVolume ?? (latestGate?.[4] ? Number.parseFloat(latestGate[4]) : null),
     meanDcdt: meanDcdt ?? null,
+    tauQig: tauQig,
   }
 
   return Object.values(metrics).some((value) => value !== null)
@@ -139,9 +150,9 @@ export function parseComplexityRateSeries(stdout: string): ComplexityRateSample[
 
   for (const line of stdout.split('\n')) {
     // Support multiple formats:
-    // 1. New explicit clock format: step=N, wall_time=X, complexity_time=Y, rg_depth=Z, dC/dt=W
+    // 1. New τ_QIG format: step=N, τ_QIG=X, dC/dτ_QIG=Y
     // 2. Old format: t=X, C=Y, dC/dt=Z
-    const newFormat = line.match(/step=(\d+),.*?dC\/dt=([0-9]+\.?[0-9]*)/)
+    const newFormat = line.match(/step=(\d+),.*?τ_QIG=([0-9]+\.?[0-9]*).*?dC\/dτ_QIG=([0-9]+\.?[0-9]*)/)
     const oldFormat = line.match(/t=([0-9]+\.?[0-9]*),\s*C=[0-9]+\.?[0-9]*,\s*dC\/dt=([0-9]+\.?[0-9]*)/)
     
     const match = newFormat || oldFormat

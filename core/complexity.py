@@ -152,14 +152,19 @@ class Gate:
 @dataclass
 class ComplexitySnapshot:
     """Point-in-time record of complexity state."""
-    timestamp: float
+    timestamp: float                # Wall-clock time (seconds)
+    tau_qig: float                  # Intrinsic QIG proper time
     circuit_depth: int
     gate_count: int
     complexity: float               # C(t) — the "bulk volume"
     energy_expended: float          # Total energy used
+    weighted_E_tau: float           # Σ E_k × Δτ_k for computing E_bar
     dcdt: float                     # dC/dt — the "gravitational" quantity
-    lloyd_bound: float              # 2E/pi*hbar — max allowed dC/dt
-    lloyd_fraction: float           # dcdt / lloyd_bound — how close to BH behavior
+    dC_dtau: float                  # dC/dτ_QIG — intrinsic rate
+    lloyd_bound: float              # 2E/πℏ — max allowed dC/dt
+    lloyd_bound_intrinsic: float    # 2E/πℏ for intrinsic clock
+    lloyd_fraction: float           # dcdt / lloyd_bound (wall-time based)
+    intrinsic_efficiency: float     # (dC/dτ) / (2E/πℏ) — should be ~1.0
     state_entropy: float            # Current entanglement entropy
 
 
@@ -191,6 +196,8 @@ class ComplexityTracker:
         self.circuit_depth: int = 0
         self.total_complexity: float = 0.0
         self.total_energy: float = 0.0
+        self.tau_qig: float = 0.0           # Intrinsic QIG proper time Σ Δτ_k
+        self.weighted_E_tau: float = 0.0    # Σ E_k × Δτ_k for computing E_bar
         self.start_time: float = perf_counter()
         self.history: deque = deque(maxlen=1000)
         self.current_entropy: float = 0.0
@@ -205,7 +212,8 @@ class ComplexityTracker:
         Each gate:
         1. Increases circuit depth (temporal geometry deepens)
         2. Consumes energy (tracked against Lloyd bound)
-        3. Potentially changes entanglement structure (spatial geometry changes)
+        3. Advances intrinsic QIG time: Δτ = (πℏ/2E) × ΔC
+        4. Potentially changes entanglement structure (spatial geometry changes)
         """
         energy_needed = gate.energy_cost
         if self.total_energy + energy_needed > self.energy_budget:
@@ -215,6 +223,12 @@ class ComplexityTracker:
         self.circuit_depth += 1
         self.total_complexity += gate.complexity_cost
         self.total_energy += energy_needed
+        
+        # Advance intrinsic QIG time: Δτ = (πℏ/2E) × ΔC
+        dtau = compute_intrinsic_time(gate.complexity_cost, gate.energy_cost)
+        self.tau_qig += dtau
+        self.weighted_E_tau += gate.energy_cost * dtau
+        
         self._record_snapshot()
         return True
 
@@ -355,28 +369,61 @@ class ComplexityTracker:
             self.history[-1].state_entropy = entropy
 
     def _record_snapshot(self):
-        """Record current state for history."""
+        """Record current state for history with dual-clock tracking."""
+        # Compute intrinsic rate: dC/dτ_QIG
+        dC_dtau = self.total_complexity / self.tau_qig if self.tau_qig > 1e-10 else 0.0
+        
+        # Compute time-weighted average energy: E_bar = (Σ E_k × Δτ_k) / τ_QIG
+        E_bar_tau = self.weighted_E_tau / self.tau_qig if self.tau_qig > 1e-10 else 0.0
+        
+        # Intrinsic Lloyd bound: 2*E_bar/π
+        lloyd_bound_intrinsic = 2.0 * E_bar_tau / PI
+        
+        # Intrinsic efficiency: (dC/dτ) / (2*E_bar/π) — should be ~1.0 by construction
+        intrinsic_eff = dC_dtau / lloyd_bound_intrinsic if lloyd_bound_intrinsic > 1e-10 else 1.0
+        
         self.history.append(ComplexitySnapshot(
             timestamp=perf_counter() - self.start_time,
+            tau_qig=self.tau_qig,
             circuit_depth=self.circuit_depth,
             gate_count=len(self.gates_applied),
             complexity=self.total_complexity,
             energy_expended=self.total_energy,
+            weighted_E_tau=self.weighted_E_tau,
             dcdt=self.dcdt(),
+            dC_dtau=dC_dtau,
             lloyd_bound=self.lloyd_bound(),
+            lloyd_bound_intrinsic=lloyd_bound_intrinsic,
             lloyd_fraction=self.lloyd_fraction(),
+            intrinsic_efficiency=intrinsic_eff,
             state_entropy=self.current_entropy
         ))
 
     def check_lloyd_bound(self) -> Dict[str, float]:
         """
-        Verify the Lloyd bound is not violated.
+        Verify the Lloyd bound and compute dual-clock efficiencies.
+        
+        Returns two efficiency metrics:
+        - intrinsic_efficiency: (dC/dτ_QIG) / (2*E_bar/πℏ) — should be ~1.0
+        - execution_efficiency: (dC/dt_wall) / (2*E_phys/πℏ) — empirical
+        
         A computation approaching dC/dt → 2E/πℏ is approaching
         black-hole-like efficiency.
         """
         dc = self.dcdt()
         lb = self.lloyd_bound()
         frac = self.lloyd_fraction()
+        
+        # Get latest snapshot for intrinsic metrics
+        if self.history:
+            latest = self.history[-1]
+            dC_dtau = latest.dC_dtau
+            lloyd_intrinsic = latest.lloyd_bound_intrinsic
+            intrinsic_eff = latest.intrinsic_efficiency
+        else:
+            dC_dtau = 0.0
+            lloyd_intrinsic = lb
+            intrinsic_eff = 1.0
 
         status = "IDLE"
         if frac > 0.9:
@@ -390,15 +437,19 @@ class ComplexityTracker:
 
         return {
             "dC/dt": dc,
+            "dC/dτ_QIG": dC_dtau,
             "lloyd_bound_2E/pi": lb,
+            "lloyd_bound_intrinsic": lloyd_intrinsic,
             "fraction": frac,
+            "intrinsic_efficiency": intrinsic_eff,
             "status": status,
             "bulk_volume": self.bulk_volume(),
             "scrambling_time": self.scrambling_time(),
+            "τ_QIG": self.tau_qig,
         }
 
     def summary(self) -> str:
-        """Print complexity tracker summary."""
+        """Print complexity tracker summary with dual-clock metrics."""
         check = self.check_lloyd_bound()
         lines = [
             "=" * 60,
@@ -408,10 +459,20 @@ class ComplexityTracker:
             f"Total complexity C(t):            {self.total_complexity:.4f}",
             f"Bulk volume V = C*G_N*l:          {self.bulk_volume():.4f}",
             f"Energy expended:                  {self.total_energy:.4f}",
-            f"Complexity growth rate dC/dt:     {check['dC/dt']:.4f}",
-            f"Lloyd bound 2E/π:                 {check['lloyd_bound_2E/pi']:.4f}",
-            f"Efficiency (Lloyd fraction):      {check['fraction']:.1%}",
-            f"Status:                           {check['status']}",
+            "",
+            "DUAL CLOCK METRICS:",
+            f"  Wall time t_wall:               {self.history[-1].timestamp:.6f}s" if self.history else "",
+            f"  QIG proper time τ_QIG:          {check['τ_QIG']:.4f}",
+            "",
+            "RATE METRICS:",
+            f"  dC/dt_wall:                     {check['dC/dt']:.4f}",
+            f"  dC/dτ_QIG:                      {check['dC/dτ_QIG']:.4f}",
+            "",
+            "LLOYD EFFICIENCY (two measures):",
+            f"  Intrinsic Lloyd Efficiency:     {check['intrinsic_efficiency']:.4f} (should be ~1.0)",
+            f"  Execution Lloyd Efficiency:     {check['fraction']:.1%}",
+            f"  Status:                         {check['status']}",
+            "",
             f"Entanglement entropy:             {self.current_entropy:.4f}",
             f"Scrambling time estimate:         {check['scrambling_time']:.4f}",
             "=" * 60,

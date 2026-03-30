@@ -112,8 +112,11 @@ def demo_complexity():
     check = tracker.check_lloyd_bound()
     print(f"SCALAR_METRIC: total_complexity={tracker.total_complexity:.4f}")
     print(f"SCALAR_METRIC: bulk_volume={tracker.bulk_volume():.4f}")
-    print(f"SCALAR_METRIC: dcdt={check['dC/dt']:.4f}")
+    print(f"SCALAR_METRIC: dcdt_wall={check['dC/dt']:.4f}")
+    print(f"SCALAR_METRIC: dcdt_tau={check['dC/dτ_QIG']:.4f}")
     print(f"SCALAR_METRIC: lloyd_fraction={check['fraction']:.4f}")
+    print(f"SCALAR_METRIC: intrinsic_efficiency={check['intrinsic_efficiency']:.4f}")
+    print(f"SCALAR_METRIC: tau_qig={check['τ_QIG']:.4f}")
 
     # Compute mean dC/dt from history
     if tracker.history:
@@ -121,38 +124,47 @@ def demo_complexity():
         if dcdt_values:
             mean_dcdt = sum(dcdt_values) / len(dcdt_values)
             print(f"SCALAR_METRIC: mean_dcdt={mean_dcdt:.6f}")
+        
+        # Also output intrinsic metrics from history
+        dC_dtau_values = [s.dC_dtau for s in tracker.history if s.dC_dtau is not None]
+        intrinsic_eff_values = [s.intrinsic_efficiency for s in tracker.history if s.intrinsic_efficiency is not None]
+        if dC_dtau_values:
+            print(f"SCALAR_METRIC: mean_dC_dtau={sum(dC_dtau_values)/len(dC_dtau_values):.6f}")
+        if intrinsic_eff_values:
+            print(f"SCALAR_METRIC: mean_intrinsic_efficiency={sum(intrinsic_eff_values)/len(intrinsic_eff_values):.6f}")
     print()
 
     # Output interpolated time series for GUI chart (1000 time steps)
+    # Output vs τ_QIG (intrinsic time) not wall-time steps
     print("─" * 50)
-    print("COMPLEXITY RATE TIME SERIES (1000 steps)")
+    print("COMPLEXITY RATE TIME SERIES (vs τ_QIG)")
     print("─" * 50)
 
     n_steps = 1000
     if tracker.history:
         history_list = list(tracker.history)
-        dcdt_values = [h.dcdt for h in history_list if h.dcdt is not None]
-        if dcdt_values:
-            # Interpolate dC/dt values across 1000 time steps
+        dC_dtau_values = [h.dC_dtau for h in history_list if h.dC_dtau is not None]
+        if dC_dtau_values:
+            # Interpolate dC/dτ_QIG values across 1000 time steps
             import numpy as np
-            original_points = np.linspace(0, 1, len(dcdt_values))
+            original_points = np.linspace(0, 1, len(dC_dtau_values))
             target_points = np.linspace(0, 1, n_steps)
-            interpolated = np.interp(target_points, original_points, dcdt_values)
+            interpolated = np.interp(target_points, original_points, dC_dtau_values)
 
-            # Output with explicit clock labels
-            for i, dcdt in enumerate(interpolated):
+            # Output with explicit clock labels vs τ_QIG
+            total_tau = tracker.tau_qig
+            for i, dC_dtau in enumerate(interpolated):
                 step = i + 1
-                # Map step to different time parametrizations
-                wall_time_s = (i / (n_steps - 1)) * tracker.history[-1].timestamp if tracker.history else 0
-                complexity_t = step  # Complexity time = step index
-                rg_depth_norm = i / (n_steps - 1)  # Normalized RG depth [0,1]
+                tau_normalized = i / (n_steps - 1)
+                tau_current = total_tau * tau_normalized
+                complexity_current = tracker.total_complexity * tau_normalized
                 
                 print(f"  step={step}, "
-                      f"wall_time={wall_time_s:.9f}s, "
-                      f"complexity_time={complexity_t}, "
-                      f"rg_depth={rg_depth_norm:.4f}, "
-                      f"C={tracker.total_complexity * rg_depth_norm:.2f}, "
-                      f"dC/dt={dcdt:.6f}")
+                      f"τ_QIG={tau_current:.6f}, "
+                      f"wall_time={(i / (n_steps - 1)) * tracker.history[-1].timestamp:.9f}s, "
+                      f"complexity_time={step}, "
+                      f"C={complexity_current:.2f}, "
+                      f"dC/dτ_QIG={dC_dtau:.6f}")
     print()
 
     # Compare algorithms

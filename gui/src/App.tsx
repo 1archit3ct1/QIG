@@ -1078,15 +1078,23 @@ function App() {
                 <p>{complexityMetrics.totalComplexity?.toFixed(6) ?? '—'}</p>
               </article>
               <article>
+                <h3>QIG Proper Time τ_QIG</h3>
+                <p>{complexityMetrics.tauQig?.toFixed(6) ?? '—'}</p>
+              </article>
+              <article>
                 <h3>Complexity Growth dC/dt</h3>
                 <p>{complexityMetrics.dcdt?.toFixed(6) ?? '—'}</p>
               </article>
               <article>
-                <h3>Mean dC/dt (avg)</h3>
-                <p>{complexityMetrics.meanDcdt?.toFixed(6) ?? '—'}</p>
+                <h3>Intrinsic Rate dC/dτ_QIG</h3>
+                <p>{complexityMetrics.dcdtTau?.toFixed(6) ?? '—'}</p>
               </article>
               <article>
-                <h3>Lloyd Fraction</h3>
+                <h3>Intrinsic Lloyd Efficiency</h3>
+                <p>{complexityMetrics.intrinsicEfficiency !== null ? `${(complexityMetrics.intrinsicEfficiency * 100).toFixed(1)}%` : '—'}</p>
+              </article>
+              <article>
+                <h3>Execution Lloyd Efficiency</h3>
                 <p>{complexityMetrics.lloydFraction !== null ? `${(complexityMetrics.lloydFraction * 100).toFixed(1)}%` : '—'}</p>
               </article>
               <article>
