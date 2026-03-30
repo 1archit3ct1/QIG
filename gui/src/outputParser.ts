@@ -149,7 +149,8 @@ export function parseComplexityRateSeries(stdout: string): ComplexityRateSample[
   }
 
   const valid = points.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
-  return valid.map((point, index) => ({ x: index + 1, y: point.y }))
+  // Preserve original x values (now includes 100000 offset for better visualization)
+  return valid
 }
 
 export function parseSimulationOutput(
