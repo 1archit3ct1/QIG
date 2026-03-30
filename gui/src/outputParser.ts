@@ -138,7 +138,13 @@ export function parseComplexityRateSeries(stdout: string): ComplexityRateSample[
   const points: ComplexityRateSample[] = []
 
   for (const line of stdout.split('\n')) {
-    const match = line.match(/t=([0-9]+\.?[0-9]*),\s*C=[0-9]+\.?[0-9]*,\s*dC\/dt=([0-9]+\.?[0-9]*)/)
+    // Support multiple formats:
+    // 1. New explicit clock format: step=N, wall_time=X, complexity_time=Y, rg_depth=Z, dC/dt=W
+    // 2. Old format: t=X, C=Y, dC/dt=Z
+    const newFormat = line.match(/step=(\d+),.*?dC\/dt=([0-9]+\.?[0-9]*)/)
+    const oldFormat = line.match(/t=([0-9]+\.?[0-9]*),\s*C=[0-9]+\.?[0-9]*,\s*dC\/dt=([0-9]+\.?[0-9]*)/)
+    
+    const match = newFormat || oldFormat
     if (!match) {
       continue
     }
@@ -149,9 +155,7 @@ export function parseComplexityRateSeries(stdout: string): ComplexityRateSample[
     })
   }
 
-  const valid = points.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
-  // Preserve original x values (now includes 100000 offset for better visualization)
-  return valid
+  return points
 }
 
 export function parseSimulationOutput(

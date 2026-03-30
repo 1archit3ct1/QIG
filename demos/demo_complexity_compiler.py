@@ -54,10 +54,19 @@ def demo_complexity():
             rev_sym = "↺" if reversible else "→"
             landauer = "" if reversible else f" [Landauer: {landauer_energy(1):.2e} J]"
             timestamp = tracker.history[-1].timestamp if tracker.history else 0.0
-            # FIX: Add 100000 to time field for better visualization
-            timestamp_display = timestamp + 100000.0
+            gate_count = len(tracker.history)
+            
+            # Explicit clock labels for interdisciplinary mapping
+            wall_time = timestamp  # Physical wall-clock time (seconds)
+            elapsed_time = timestamp * 1e9  # Nanoseconds for readability
+            complexity_time = gate_count  # Gate count as complexity time
+            rg_depth = tracker.circuit_depth  # RG flow depth = circuit depth
+            
             print(f"  {rev_sym} Gate {name:10s} qubits={qubits}: "
-                  f"t={timestamp_display:.9f}, "
+                  f"wall_time={wall_time:.9f}s, "
+                  f"elapsed_time={elapsed_time:.2f}ns, "
+                  f"complexity_time={complexity_time}, "
+                  f"rg_depth={rg_depth}, "
                   f"C={tracker.total_complexity:.2f}, "
                   f"dC/dt={check['dC/dt']:.3f}, "
                   f"Lloyd={check['fraction']:.1%}, "
@@ -86,7 +95,7 @@ def demo_complexity():
     print("─" * 50)
     print("COMPLEXITY RATE TIME SERIES (1000 steps)")
     print("─" * 50)
-    
+
     n_steps = 1000
     if tracker.history:
         history_list = list(tracker.history)
@@ -97,12 +106,21 @@ def demo_complexity():
             original_points = np.linspace(0, 1, len(dcdt_values))
             target_points = np.linspace(0, 1, n_steps)
             interpolated = np.interp(target_points, original_points, dcdt_values)
-            
-            # Output in format expected by GUI parser
-            # FIX: Add 100000 to time field for better visualization
+
+            # Output with explicit clock labels
             for i, dcdt in enumerate(interpolated):
-                t_display = (i + 1) + 100000.0
-                print(f"  t={t_display:.9f}, C={tracker.total_complexity * (i / (n_steps - 1)):.2f}, dC/dt={dcdt:.6f}")
+                step = i + 1
+                # Map step to different time parametrizations
+                wall_time_s = (i / (n_steps - 1)) * tracker.history[-1].timestamp if tracker.history else 0
+                complexity_t = step  # Complexity time = step index
+                rg_depth_norm = i / (n_steps - 1)  # Normalized RG depth [0,1]
+                
+                print(f"  step={step}, "
+                      f"wall_time={wall_time_s:.9f}s, "
+                      f"complexity_time={complexity_t}, "
+                      f"rg_depth={rg_depth_norm:.4f}, "
+                      f"C={tracker.total_complexity * rg_depth_norm:.2f}, "
+                      f"dC/dt={dcdt:.6f}")
     print()
 
     # Compare algorithms
