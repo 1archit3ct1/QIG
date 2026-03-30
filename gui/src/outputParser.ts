@@ -28,10 +28,13 @@ export type ComplexityMetrics = {
   dcdt: number | null              // dC/dt_wall
   dcdtTau: number | null           // dC/dτ_QIG
   lloydFraction: number | null     // Execution Lloyd Efficiency
-  intrinsicEfficiency: number | null  // Intrinsic Lloyd Efficiency (should be ~1.0)
+  intrinsicEfficiency: number | null  // Intrinsic Lloyd Efficiency (emergent from η_k)
   bulkVolume: number | null
   meanDcdt: number | null
   tauQig: number | null            // τ_QIG - QIG proper time
+  etaMin: number | null            // Minimum gate inefficiency
+  etaMax: number | null            // Maximum gate inefficiency
+  etaMean: number | null           // Mean gate inefficiency
 }
 
 export type ComplexityRateSample = {
@@ -117,6 +120,9 @@ export function parseComplexityMetrics(stdout: string): ComplexityMetrics | null
   const bulkVolume = extractFloat(/SCALAR_METRIC:\s*bulk_volume=([0-9]+\.?[0-9]*)/, stdout)
   const meanDcdt = extractFloat(/SCALAR_METRIC:\s*mean_dcdt=([0-9]+\.?[0-9]*)/, stdout)
   const tauQig = extractFloat(/SCALAR_METRIC:\s*tau_qig=([0-9]+\.?[0-9]*)/, stdout)
+  const etaMin = extractFloat(/SCALAR_METRIC:\s*eta_min=([0-9]+\.?[0-9]*)/, stdout)
+  const etaMax = extractFloat(/SCALAR_METRIC:\s*eta_max=([0-9]+\.?[0-9]*)/, stdout)
+  const etaMean = extractFloat(/SCALAR_METRIC:\s*eta_mean=([0-9]+\.?[0-9]*)/, stdout)
 
   // Fallback to old format if no SCALAR_METRIC tags found
   const fallbackTotalComplexity = extractLastFloat(/Total complexity C\(t\):\s*([0-9]+\.?[0-9]*)/g, stdout)
@@ -138,6 +144,9 @@ export function parseComplexityMetrics(stdout: string): ComplexityMetrics | null
     bulkVolume: bulkVolume ?? fallbackBulkVolume ?? (latestGate?.[4] ? Number.parseFloat(latestGate[4]) : null),
     meanDcdt: meanDcdt ?? null,
     tauQig: tauQig,
+    etaMin: etaMin,
+    etaMax: etaMax,
+    etaMean: etaMean,
   }
 
   return Object.values(metrics).some((value) => value !== null)

@@ -28,16 +28,129 @@ HBAR = 1.0           # Natural units
 PI = np.pi
 
 
+# =============================================================================
+# GATE INEFFICIENCY MODEL (η_k)
+# =============================================================================
+# Intrinsic Lloyd efficiency is no longer fixed at 100% by construction.
+# 
+# New definition: Δτ_k = (πℏ / 2E_k) × ΔC_k / η_k
+# where 0 < η_k ≤ 1 is an emergent gate inefficiency factor.
+#
+# This makes intrinsic efficiency emerge from circuit structure:
+# - gate type (base efficiency)
+# - graph nonlocality (distance penalty)
+# - entanglement sparsity (low MI penalty)
+# - curvature (high complexity density penalty)
+# - irreversibility (measurement/reset penalty)
+#
+# Key principle: entanglement defines spatial geometry,
+# complexity defines temporal depth,
+# τ_QIG is intrinsic proper time,
+# intrinsic efficiency emerges from circuit structure, not fixed by definition.
+# =============================================================================
+
+# Base eta values by gate class (typical implementation efficiency)
+BASE_ETA = {
+    # 1-qubit reversible gates: high efficiency (local, well-controlled)
+    "H": 0.98, "X": 0.98, "Y": 0.98, "Z": 0.98, "S": 0.98,
+    # 1-qubit non-Clifford: slightly lower (harder to implement fault-tolerantly)
+    "T": 0.95, "RX": 0.96, "RY": 0.96, "RZ": 0.96, "U3": 0.95,
+    # 2-qubit entangling: lower due to nonlocality
+    "CNOT": 0.92, "CZ": 0.92,
+    # Long-range entangling: additional routing overhead
+    "RCNOT": 0.88, "RCZ": 0.88,
+    # SWAP: routing operation, not computational
+    "SWAP": 0.90,
+    # 3+ qubit gates: complex multi-qubit coordination
+    "TOFFOLI": 0.88, "CCZ": 0.88, "CCNOT": 0.88,
+    "QFT": 0.85, "QFT3": 0.85,
+    # Irreversible operations: significant inefficiency
+    "MEASURE": 0.70, "RESET": 0.70,
+}
+
+
+def compute_gate_eta(
+    gate_name: str,
+    n_qubits: int = 1,
+    avg_distance: float = 1.0,
+    avg_mutual_info: float = 1.0,
+    complexity_density: float = 1.0,
+    is_reversible: bool = True,
+) -> float:
+    """
+    Compute emergent gate inefficiency factor η_k.
+    
+    η_k = clamp(base_eta × locality_factor × entanglement_factor 
+                × curvature_factor × irreversibility_factor, 0.05, 1.0)
+    
+    Parameters:
+    - gate_name: name of the gate for base eta lookup
+    - n_qubits: number of qubits the gate acts on
+    - avg_distance: average graph distance between qubits (1.0 = nearest neighbor)
+    - avg_mutual_info: average mutual information of affected qubits (1.0 = typical)
+    - complexity_density: local complexity density (1.0 = baseline)
+    - is_reversible: whether the gate is reversible
+    
+    Returns:
+    - η_k in range [0.05, 1.0]
+    
+    Interpretation:
+    - η_k = 1.0: ideal gate, no inefficiency
+    - η_k < 1.0: emergent inefficiency from implementation constraints
+    - Lower η_k means more intrinsic time per unit complexity
+    """
+    # Base eta from gate type
+    gate_upper = gate_name.upper()
+    base_eta = BASE_ETA.get(gate_upper, 0.95 if n_qubits == 1 else 0.90)
+    
+    # Locality factor: gates acting on distant qubits are less efficient
+    # distance > 1 adds penalty (e.g., distance=2 → factor ≈ 0.95)
+    locality_factor = 1.0 / (1.0 + 0.05 * max(0, avg_distance - 1))
+    
+    # Entanglement factor: gates on weakly entangled qubits are less efficient
+    # Low MI means the gate is acting on effectively disconnected subsystems
+    entanglement_factor = min(1.0, avg_mutual_info / 0.5) if avg_mutual_info > 0 else 0.5
+    
+    # Curvature factor: high complexity density reduces efficiency
+    # (analogous to congestion in spacetime)
+    curvature_factor = 1.0 / (1.0 + 0.1 * max(0, complexity_density - 1))
+    
+    # Irreversibility factor: measurement/reset have fundamental inefficiency
+    irreversibility_factor = 1.0 if is_reversible else 0.7
+    
+    # Combine factors
+    eta = base_eta * locality_factor * entanglement_factor * curvature_factor * irreversibility_factor
+    
+    # Clamp to valid range
+    return max(0.05, min(1.0, eta))
+
+
+def compute_intrinsic_time_with_eta(dC: float, E: float, eta: float = 1.0) -> float:
+    """
+    Compute intrinsic QIG time increment with inefficiency factor.
+    
+    Δτ = (πℏ / 2E) × ΔC / η
+    
+    When η < 1, the gate takes MORE intrinsic time per unit complexity,
+    reflecting implementation inefficiency.
+    
+    In natural units (ℏ=1): Δτ = (π / 2E) × ΔC / η
+    """
+    if E < 1e-10 or eta < 1e-10:
+        return 0.0
+    return (PI * HBAR / (2.0 * E)) * dC / eta
+
+
 # Standard gate table for QIG simulator
 # Based on framework identifications:
 #   - temporal depth from computational complexity
-#   - intrinsic time from Δτ_k = (πℏ/2E_k) * ΔC_k
+#   - intrinsic time from Δτ_k = (πℏ/2E_k) * ΔC_k / η_k
 #   - higher-cost/nonlocal operations carry more complexity weight
 #
 # Gate classes:
 #   ΔC_k = complexity increment
 #   E_k = effective energy scale
-#   w_τ = ΔC_k / E_k determines intrinsic time contribution
+#   η_k = inefficiency factor (computed dynamically)
 GATE_TABLE = {
     # Simple 1-qubit Clifford gates (minimal reversible local update)
     "H":       {"dC": 1.0, "E": 1.0},
@@ -82,45 +195,46 @@ GATE_TABLE = {
 def get_gate_costs(gate_name: str, n_qubits: int = None) -> Tuple[float, float]:
     """
     Get complexity (dC) and energy (E) costs for a gate.
-    
+
     For composite gates (QFT(n)), compute based on qubit count.
-    
+
     Returns: (dC, E) tuple
     """
     gate_upper = gate_name.upper()
-    
+
     # Check direct lookup first
     if gate_upper in GATE_TABLE:
         spec = GATE_TABLE[gate_upper]
         return spec["dC"], spec["E"]
-    
+
     # Handle QFT(n) with n qubits
     if gate_upper.startswith("QFT") and n_qubits is not None:
         # dC = 1.5n + 0.25n², E = 1.0 + 0.8n
         dC = 1.5 * n_qubits + 0.25 * n_qubits * n_qubits
         E = 1.0 + 0.8 * n_qubits
         return dC, E
-    
+
     # Default fallback for unknown gates
     if n_qubits is not None and n_qubits > 2:
         # Multi-qubit gate: scale with qubit count
         return float(n_qubits), float(n_qubits * 0.8)
-    
+
     # Single unknown gate
     return 1.0, 1.0
 
 
-def compute_intrinsic_time(dC: float, E: float) -> float:
+def compute_intrinsic_time(dC: float, E: float, eta: float = 1.0) -> float:
     """
     Compute intrinsic QIG time increment from complexity and energy.
     
-    Δτ = (πℏ / 2E) * ΔC
+    With eta: Δτ = (πℏ / 2E) × ΔC / η
     
-    In natural units (ℏ=1): Δτ = (π / 2E) * ΔC
+    When η < 1, the gate takes MORE intrinsic time per unit complexity,
+    reflecting implementation inefficiency.
+
+    In natural units (ℏ=1): Δτ = (π / 2E) × ΔC / η
     """
-    if E < 1e-10:
-        return 0.0
-    return (PI * HBAR / (2.0 * E)) * dC
+    return compute_intrinsic_time_with_eta(dC, E, eta)
 
 
 @dataclass
@@ -132,9 +246,10 @@ class Gate:
     complexity_cost: float = None  # Will default from GATE_TABLE
     energy_cost: float = None      # Will default from GATE_TABLE
     is_reversible: bool = True     # Reversible gates preserve information
+    eta: float = None              # Inefficiency factor (computed if not provided)
     
     def __post_init__(self):
-        """Initialize costs from GATE_TABLE if not provided."""
+        """Initialize costs and eta from GATE_TABLE if not provided."""
         n_qubits = len(self.qubits) if self.qubits else 1
         dC, E = get_gate_costs(self.name, n_qubits)
         
@@ -143,6 +258,11 @@ class Gate:
             self.complexity_cost = dC
         if self.energy_cost is None:
             self.energy_cost = E
+        
+        # Compute eta if not provided (default: base eta for gate type)
+        if self.eta is None:
+            gate_upper = self.name.upper()
+            self.eta = BASE_ETA.get(gate_upper, 0.95 if n_qubits == 1 else 0.90)
         
         # Mark irreversible operations
         if self.name.upper() in ["MEASURE", "RESET"]:
@@ -164,7 +284,11 @@ class ComplexitySnapshot:
     lloyd_bound: float              # 2E/πℏ — max allowed dC/dt
     lloyd_bound_intrinsic: float    # 2E/πℏ for intrinsic clock
     lloyd_fraction: float           # dcdt / lloyd_bound (wall-time based)
-    intrinsic_efficiency: float     # (dC/dτ) / (2E/πℏ) — should be ~1.0
+    intrinsic_efficiency: float     # (dC/dτ) / (2E/πℏ) — emergent from η_k
+    eta: float                      # Current gate inefficiency factor
+    eta_min: float                  # Minimum eta seen so far
+    eta_max: float                  # Maximum eta seen so far
+    eta_mean: float                 # Mean eta over all gates
     state_entropy: float            # Current entanglement entropy
 
 
@@ -198,6 +322,9 @@ class ComplexityTracker:
         self.total_energy: float = 0.0
         self.tau_qig: float = 0.0           # Intrinsic QIG proper time Σ Δτ_k
         self.weighted_E_tau: float = 0.0    # Σ E_k × Δτ_k for computing E_bar
+        self.eta_sum: float = 0.0           # Σ η_k for computing mean
+        self.eta_min: float = 1.0           # Minimum eta seen
+        self.eta_max: float = 0.0           # Maximum eta seen
         self.start_time: float = perf_counter()
         self.history: deque = deque(maxlen=1000)
         self.current_entropy: float = 0.0
@@ -205,15 +332,21 @@ class ComplexityTracker:
         # Snapshot at t=0
         self._record_snapshot()
 
-    def apply_gate(self, gate: Gate) -> bool:
+    def apply_gate(self, gate: Gate, avg_distance: float = 1.0, avg_mutual_info: float = 1.0, complexity_density: float = 1.0) -> bool:
         """
         Apply a gate. Returns False if energy budget exceeded.
 
         Each gate:
         1. Increases circuit depth (temporal geometry deepens)
         2. Consumes energy (tracked against Lloyd bound)
-        3. Advances intrinsic QIG time: Δτ = (πℏ/2E) × ΔC
+        3. Advances intrinsic QIG time: Δτ = (πℏ/2E) × ΔC / η_k
         4. Potentially changes entanglement structure (spatial geometry changes)
+        
+        Parameters:
+        - gate: the gate to apply
+        - avg_distance: average graph distance between qubits (for eta calculation)
+        - avg_mutual_info: average mutual information of affected qubits
+        - complexity_density: local complexity density
         """
         energy_needed = gate.energy_cost
         if self.total_energy + energy_needed > self.energy_budget:
@@ -223,12 +356,28 @@ class ComplexityTracker:
         self.circuit_depth += 1
         self.total_complexity += gate.complexity_cost
         self.total_energy += energy_needed
+
+        # Compute emergent eta for this gate based on context
+        gate.eta = compute_gate_eta(
+            gate.name,
+            len(gate.qubits),
+            avg_distance,
+            avg_mutual_info,
+            complexity_density,
+            gate.is_reversible
+        )
         
-        # Advance intrinsic QIG time: Δτ = (πℏ/2E) × ΔC
-        dtau = compute_intrinsic_time(gate.complexity_cost, gate.energy_cost)
+        # Track eta statistics
+        self.eta_sum += gate.eta
+        self.eta_min = min(self.eta_min, gate.eta)
+        self.eta_max = max(self.eta_max, gate.eta)
+
+        # Advance intrinsic QIG time: Δτ = (πℏ/2E) × ΔC / η_k
+        # When η_k < 1, the gate takes MORE intrinsic time per unit complexity
+        dtau = compute_intrinsic_time(gate.complexity_cost, gate.energy_cost, gate.eta)
         self.tau_qig += dtau
         self.weighted_E_tau += gate.energy_cost * dtau
-        
+
         self._record_snapshot()
         return True
 
@@ -370,23 +519,28 @@ class ComplexityTracker:
 
     def _record_snapshot(self):
         """Record current state for history with dual-clock tracking."""
+        n_gates = len(self.gates_applied)
+        eta_mean = self.eta_sum / n_gates if n_gates > 0 else 1.0
+        current_eta = self.gates_applied[-1].eta if self.gates_applied else 1.0
+        
         # Compute intrinsic rate: dC/dτ_QIG
         dC_dtau = self.total_complexity / self.tau_qig if self.tau_qig > 1e-10 else 0.0
-        
+
         # Compute time-weighted average energy: E_bar = (Σ E_k × Δτ_k) / τ_QIG
         E_bar_tau = self.weighted_E_tau / self.tau_qig if self.tau_qig > 1e-10 else 0.0
-        
+
         # Intrinsic Lloyd bound: 2*E_bar/π
         lloyd_bound_intrinsic = 2.0 * E_bar_tau / PI
-        
-        # Intrinsic efficiency: (dC/dτ) / (2*E_bar/π) — should be ~1.0 by construction
+
+        # Intrinsic efficiency: (dC/dτ) / (2*E_bar/π)
+        # With η_k < 1, this will be < 1.0, reflecting emergent inefficiency
         intrinsic_eff = dC_dtau / lloyd_bound_intrinsic if lloyd_bound_intrinsic > 1e-10 else 1.0
-        
+
         self.history.append(ComplexitySnapshot(
             timestamp=perf_counter() - self.start_time,
             tau_qig=self.tau_qig,
             circuit_depth=self.circuit_depth,
-            gate_count=len(self.gates_applied),
+            gate_count=n_gates,
             complexity=self.total_complexity,
             energy_expended=self.total_energy,
             weighted_E_tau=self.weighted_E_tau,
@@ -396,34 +550,44 @@ class ComplexityTracker:
             lloyd_bound_intrinsic=lloyd_bound_intrinsic,
             lloyd_fraction=self.lloyd_fraction(),
             intrinsic_efficiency=intrinsic_eff,
+            eta=current_eta,
+            eta_min=self.eta_min,
+            eta_max=self.eta_max,
+            eta_mean=eta_mean,
             state_entropy=self.current_entropy
         ))
 
     def check_lloyd_bound(self) -> Dict[str, float]:
         """
         Verify the Lloyd bound and compute dual-clock efficiencies.
-        
+
         Returns two efficiency metrics:
-        - intrinsic_efficiency: (dC/dτ_QIG) / (2*E_bar/πℏ) — should be ~1.0
+        - intrinsic_efficiency: (dC/dτ_QIG) / (2*E_bar/πℏ) — emergent from η_k
         - execution_efficiency: (dC/dt_wall) / (2*E_phys/πℏ) — empirical
-        
-        A computation approaching dC/dt → 2E/πℏ is approaching
-        black-hole-like efficiency.
+
+        With η_k < 1, intrinsic efficiency will be < 1.0, reflecting
+        emergent inefficiency from circuit structure.
         """
         dc = self.dcdt()
         lb = self.lloyd_bound()
         frac = self.lloyd_fraction()
-        
+
         # Get latest snapshot for intrinsic metrics
         if self.history:
             latest = self.history[-1]
             dC_dtau = latest.dC_dtau
             lloyd_intrinsic = latest.lloyd_bound_intrinsic
             intrinsic_eff = latest.intrinsic_efficiency
+            eta_mean = latest.eta_mean
+            eta_min = latest.eta_min
+            eta_max = latest.eta_max
         else:
             dC_dtau = 0.0
             lloyd_intrinsic = lb
             intrinsic_eff = 1.0
+            eta_mean = 1.0
+            eta_min = 1.0
+            eta_max = 1.0
 
         status = "IDLE"
         if frac > 0.9:
@@ -442,6 +606,9 @@ class ComplexityTracker:
             "lloyd_bound_intrinsic": lloyd_intrinsic,
             "fraction": frac,
             "intrinsic_efficiency": intrinsic_eff,
+            "eta_mean": eta_mean,
+            "eta_min": eta_min,
+            "eta_max": eta_max,
             "status": status,
             "bulk_volume": self.bulk_volume(),
             "scrambling_time": self.scrambling_time(),
@@ -449,7 +616,7 @@ class ComplexityTracker:
         }
 
     def summary(self) -> str:
-        """Print complexity tracker summary with dual-clock metrics."""
+        """Print complexity tracker summary with dual-clock metrics and eta statistics."""
         check = self.check_lloyd_bound()
         lines = [
             "=" * 60,
@@ -469,9 +636,14 @@ class ComplexityTracker:
             f"  dC/dτ_QIG:                      {check['dC/dτ_QIG']:.4f}",
             "",
             "LLOYD EFFICIENCY (two measures):",
-            f"  Intrinsic Lloyd Efficiency:     {check['intrinsic_efficiency']:.4f} (should be ~1.0)",
+            f"  Intrinsic Lloyd Efficiency:     {check['intrinsic_efficiency']:.4f} (emergent from η_k)",
             f"  Execution Lloyd Efficiency:     {check['fraction']:.1%}",
             f"  Status:                         {check['status']}",
+            "",
+            "GATE INEFFICIENCY (η_k) STATISTICS:",
+            f"  η_mean:                         {check['eta_mean']:.4f}",
+            f"  η_min:                          {check['eta_min']:.4f}",
+            f"  η_max:                          {check['eta_max']:.4f}",
             "",
             f"Entanglement entropy:             {self.current_entropy:.4f}",
             f"Scrambling time estimate:         {check['scrambling_time']:.4f}",

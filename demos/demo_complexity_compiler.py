@@ -117,6 +117,9 @@ def demo_complexity():
     print(f"SCALAR_METRIC: lloyd_fraction={check['fraction']:.4f}")
     print(f"SCALAR_METRIC: intrinsic_efficiency={check['intrinsic_efficiency']:.4f}")
     print(f"SCALAR_METRIC: tau_qig={check['τ_QIG']:.4f}")
+    print(f"SCALAR_METRIC: eta_min={check['eta_min']:.4f}")
+    print(f"SCALAR_METRIC: eta_max={check['eta_max']:.4f}")
+    print(f"SCALAR_METRIC: eta_mean={check['eta_mean']:.4f}")
 
     # Compute mean dC/dt from history
     if tracker.history:
@@ -124,7 +127,7 @@ def demo_complexity():
         if dcdt_values:
             mean_dcdt = sum(dcdt_values) / len(dcdt_values)
             print(f"SCALAR_METRIC: mean_dcdt={mean_dcdt:.6f}")
-        
+
         # Also output intrinsic metrics from history
         dC_dtau_values = [s.dC_dtau for s in tracker.history if s.dC_dtau is not None]
         intrinsic_eff_values = [s.intrinsic_efficiency for s in tracker.history if s.intrinsic_efficiency is not None]

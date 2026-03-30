@@ -1101,6 +1101,18 @@ function App() {
                 <h3>Bulk Volume = C·G_N·l_AdS</h3>
                 <p>{complexityMetrics.bulkVolume?.toFixed(6) ?? '—'}</p>
               </article>
+              <article>
+                <h3>η Mean (inefficiency)</h3>
+                <p>{complexityMetrics.etaMean?.toFixed(4) ?? '—'}</p>
+              </article>
+              <article>
+                <h3>η Min</h3>
+                <p>{complexityMetrics.etaMin?.toFixed(4) ?? '—'}</p>
+              </article>
+              <article>
+                <h3>η Max</h3>
+                <p>{complexityMetrics.etaMax?.toFixed(4) ?? '—'}</p>
+              </article>
             </div>
 
             {complexityRateSeries.length > 0 && (
