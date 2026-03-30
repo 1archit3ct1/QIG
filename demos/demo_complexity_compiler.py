@@ -7,7 +7,10 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import numpy as np
-from core.complexity import ComplexityTracker, Gate, gate_complexity_for_algorithm, landauer_energy
+from core.complexity import (
+    ComplexityTracker, Gate, gate_complexity_for_algorithm, landauer_energy,
+    GATE_TABLE, compute_intrinsic_time, get_gate_costs
+)
 
 
 def demo_complexity():
@@ -18,25 +21,44 @@ def demo_complexity():
     print("QIG Thesis: C(t) = bulk volume. dC/dt = gravity.")
     print("Black holes saturate: dC/dt = 2M/πℏ (Lloyd bound)")
     print()
+    print("Intrinsic time: Δτ_QIG = (πℏ/2E) × ΔC")
+    print()
+    
+    # Print gate table summary
+    print("─" * 50)
+    print("STANDARD GATE TABLE (QIG Simulator)")
+    print("─" * 50)
+    print(f"  {'Gate':<12} {'ΔC':>6} {'E':>6} {'ΔC/E':>6} {'Δτ_QIG':>8}")
+    print("  " + "─" * 42)
+    for gate_name, costs in sorted(GATE_TABLE.items()):
+        dC = costs["dC"]
+        E = costs["E"]
+        ratio = dC / E if E > 0 else 0
+        dtau = compute_intrinsic_time(dC, E)
+        print(f"  {gate_name:<12} {dC:>6.1f} {E:>6.1f} {ratio:>6.2f} {dtau:>8.4f}")
+    print()
 
     tracker = ComplexityTracker(n_qubits=8, energy_budget=200.0, G_N=1.0)
 
     # Simulate building up a quantum circuit
+    # Gate specifications using standardized GATE_TABLE
+    # Format: (name, qubits, is_reversible)
+    # complexity_cost and energy_cost will default from GATE_TABLE
     gate_specs = [
-        ("H",       [0],    1.0,  1.0,  True),
-        ("H",       [1],    1.0,  1.0,  True),
-        ("CNOT",    [0,1],  1.5,  2.0,  True),
-        ("H",       [2],    1.0,  1.0,  True),
-        ("CNOT",    [1,2],  1.5,  2.0,  True),
-        ("T",       [0],    2.0,  1.5,  True),
-        ("CNOT",    [2,3],  1.5,  2.0,  True),
-        ("H",       [3],    1.0,  1.0,  True),
-        ("MEASURE", [0],    0.5,  3.0,  False),  # Irreversible! Landauer cost
-        ("RESET",   [0],    0.5,  3.0,  False),  # Irreversible
-        ("CNOT",    [3,4],  1.5,  2.0,  True),
-        ("QFT",     [4,5,6],5.0,  8.0,  True),
-        ("CNOT",    [6,7],  1.5,  2.0,  True),
-        ("H",       [7],    1.0,  1.0,  True),
+        ("H",       [0],    True),
+        ("H",       [1],    True),
+        ("CNOT",    [0,1],  True),
+        ("H",       [2],    True),
+        ("CNOT",    [1,2],  True),
+        ("T",       [0],    True),
+        ("CNOT",    [2,3],  True),
+        ("H",       [3],    True),
+        ("MEASURE", [0],    False),  # Irreversible! Landauer cost
+        ("RESET",   [0],    False),  # Irreversible
+        ("CNOT",    [3,4],  True),
+        ("QFT",     [4,5,6],True),
+        ("CNOT",    [6,7],  True),
+        ("H",       [7],    True),
     ]
 
     print("─" * 50)
@@ -45,9 +67,13 @@ def demo_complexity():
     print("─" * 50)
     print()
 
-    for name, qubits, c_cost, e_cost, reversible in gate_specs:
-        gate = Gate(name, qubits, complexity_cost=c_cost,
-                    energy_cost=e_cost, is_reversible=reversible)
+    cumulative_tau = 0.0  # Intrinsic QIG time
+    
+    for name, qubits, reversible in gate_specs:
+        # Get standardized costs from GATE_TABLE
+        dC, E = get_gate_costs(name, len(qubits))
+        gate = Gate(name, qubits)  # Costs auto-populated from table
+        
         success = tracker.apply_gate(gate)
         if success:
             check = tracker.check_lloyd_bound()
@@ -55,6 +81,10 @@ def demo_complexity():
             landauer = "" if reversible else f" [Landauer: {landauer_energy(1):.2e} J]"
             timestamp = tracker.history[-1].timestamp if tracker.history else 0.0
             gate_count = len(tracker.history)
+            
+            # Compute intrinsic time for this gate
+            dtau = compute_intrinsic_time(dC, E)
+            cumulative_tau += dtau
             
             # Explicit clock labels for interdisciplinary mapping
             wall_time = timestamp  # Physical wall-clock time (seconds)
@@ -67,6 +97,8 @@ def demo_complexity():
                   f"elapsed_time={elapsed_time:.2f}ns, "
                   f"complexity_time={complexity_time}, "
                   f"rg_depth={rg_depth}, "
+                  f"dC={dC:.1f}, E={E:.1f}, "
+                  f"Δτ_QIG={dtau:.4f}, τ_QIG={cumulative_tau:.4f}, "
                   f"C={tracker.total_complexity:.2f}, "
                   f"dC/dt={check['dC/dt']:.3f}, "
                   f"Lloyd={check['fraction']:.1%}, "

@@ -28,15 +28,125 @@ HBAR = 1.0           # Natural units
 PI = np.pi
 
 
+# Standard gate table for QIG simulator
+# Based on framework identifications:
+#   - temporal depth from computational complexity
+#   - intrinsic time from Δτ_k = (πℏ/2E_k) * ΔC_k
+#   - higher-cost/nonlocal operations carry more complexity weight
+#
+# Gate classes:
+#   ΔC_k = complexity increment
+#   E_k = effective energy scale
+#   w_τ = ΔC_k / E_k determines intrinsic time contribution
+GATE_TABLE = {
+    # Simple 1-qubit Clifford gates (minimal reversible local update)
+    "H":       {"dC": 1.0, "E": 1.0},
+    "X":       {"dC": 1.0, "E": 1.0},
+    "Y":       {"dC": 1.0, "E": 1.0},
+    "Z":       {"dC": 1.0, "E": 1.0},
+    "S":       {"dC": 1.0, "E": 1.0},
+    
+    # 1-qubit non-Clifford / arbitrary rotation (harder resource)
+    "T":       {"dC": 1.5, "E": 1.2},
+    "RX":      {"dC": 1.5, "E": 1.2},
+    "RY":      {"dC": 1.5, "E": 1.2},
+    "RZ":      {"dC": 1.5, "E": 1.2},
+    "U3":      {"dC": 1.5, "E": 1.2},
+    
+    # 2-qubit entanglers, nearest-neighbor (nonlocal entangling step)
+    "CNOT":    {"dC": 2.0, "E": 2.0},
+    "CZ":      {"dC": 2.0, "E": 2.0},
+    
+    # 2-qubit entanglers, long-range (added geometric/routing burden)
+    "RCNOT":   {"dC": 2.5, "E": 2.2},
+    "RCZ":     {"dC": 2.5, "E": 2.2},
+    
+    # SWAP (routing cost, not highly "creative" but costly)
+    "SWAP":    {"dC": 2.0, "E": 1.8},
+    
+    # 3-qubit controlled gates (higher synthesis complexity)
+    "TOFFOLI": {"dC": 4.0, "E": 3.0},
+    "CCZ":     {"dC": 4.0, "E": 3.0},
+    "CCNOT":   {"dC": 4.0, "E": 3.0},
+    
+    # Small structured transforms
+    "QFT3":    {"dC": 5.0, "E": 3.5},
+    "QFT":     {"dC": 5.0, "E": 3.5},  # Default 3-qubit QFT
+    
+    # Irreversible / open-system operations
+    "MEASURE": {"dC": 0.5, "E": 1.5},  # Low unitary complexity, physical cost
+    "RESET":   {"dC": 0.5, "E": 1.8},  # More dissipative than measurement
+}
+
+
+def get_gate_costs(gate_name: str, n_qubits: int = None) -> Tuple[float, float]:
+    """
+    Get complexity (dC) and energy (E) costs for a gate.
+    
+    For composite gates (QFT(n)), compute based on qubit count.
+    
+    Returns: (dC, E) tuple
+    """
+    gate_upper = gate_name.upper()
+    
+    # Check direct lookup first
+    if gate_upper in GATE_TABLE:
+        spec = GATE_TABLE[gate_upper]
+        return spec["dC"], spec["E"]
+    
+    # Handle QFT(n) with n qubits
+    if gate_upper.startswith("QFT") and n_qubits is not None:
+        # dC = 1.5n + 0.25n², E = 1.0 + 0.8n
+        dC = 1.5 * n_qubits + 0.25 * n_qubits * n_qubits
+        E = 1.0 + 0.8 * n_qubits
+        return dC, E
+    
+    # Default fallback for unknown gates
+    if n_qubits is not None and n_qubits > 2:
+        # Multi-qubit gate: scale with qubit count
+        return float(n_qubits), float(n_qubits * 0.8)
+    
+    # Single unknown gate
+    return 1.0, 1.0
+
+
+def compute_intrinsic_time(dC: float, E: float) -> float:
+    """
+    Compute intrinsic QIG time increment from complexity and energy.
+    
+    Δτ = (πℏ / 2E) * ΔC
+    
+    In natural units (ℏ=1): Δτ = (π / 2E) * ΔC
+    """
+    if E < 1e-10:
+        return 0.0
+    return (PI * HBAR / (2.0 * E)) * dC
+
+
 @dataclass
 class Gate:
     """An elementary quantum gate — the unit of computational complexity."""
     name: str
     qubits: List[int]
     unitary: Optional[np.ndarray] = None
-    complexity_cost: float = 1.0    # Default: each gate adds 1 to complexity
-    energy_cost: float = 1.0        # Energy consumed (for Lloyd bound tracking)
-    is_reversible: bool = True      # Reversible gates preserve information
+    complexity_cost: float = None  # Will default from GATE_TABLE
+    energy_cost: float = None      # Will default from GATE_TABLE
+    is_reversible: bool = True     # Reversible gates preserve information
+    
+    def __post_init__(self):
+        """Initialize costs from GATE_TABLE if not provided."""
+        n_qubits = len(self.qubits) if self.qubits else 1
+        dC, E = get_gate_costs(self.name, n_qubits)
+        
+        # Use provided values or default from table
+        if self.complexity_cost is None:
+            self.complexity_cost = dC
+        if self.energy_cost is None:
+            self.energy_cost = E
+        
+        # Mark irreversible operations
+        if self.name.upper() in ["MEASURE", "RESET"]:
+            self.is_reversible = False
 
 
 @dataclass
