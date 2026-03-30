@@ -146,29 +146,43 @@ class QIGGraph:
         Compute the full n×n metric distance matrix.
         This IS the spatial geometry — not assumed, but derived.
         """
+        # FIX: Add MI threshold filter - only compute distances for entangled pairs
+        MI_THRESHOLD = 1e-6  # filter out product state distances
+        
         n = self.n_nodes
         D = np.zeros((n, n))
+        
+        # Initialize distances to infinity for disconnected pairs
+        D[:] = np.inf
+        np.fill_diagonal(D, 0.0)
+        
         for i in range(n):
             for j in range(i + 1, n):
-                d = self.metric_distance(i, j)
-                D[i, j] = d
-                D[j, i] = d
+                mi = self.mutual_information(i, j)
+                if mi > MI_THRESHOLD:  # only compute distance for entangled pairs
+                    d = self.metric_distance(i, j)
+                    D[i, j] = d
+                    D[j, i] = d
+                    # Update graph edge weights if edge exists
+                    if self.graph.has_edge(i, j):
+                        self.graph[i][j]['weight'] = d
+                        self.graph[i][j]['mutual_info'] = mi
         self.metric = D
-
-        # Update graph edge weights
-        for i in range(n):
-            for j in range(i + 1, n):
-                self.graph[i][j]['weight'] = D[i, j]
-                self.graph[i][j]['mutual_info'] = self.mutual_information(i, j)
 
         return D
 
     def _build_graph_structure(self):
-        """Build the underlying networkx graph with all edges."""
+        """Build the underlying networkx graph with edges only for entangled pairs."""
+        # FIX: Add MI threshold filter - only add edges with real entanglement
+        MI_THRESHOLD = 1e-6  # filter out product state distances
+        
         self.graph.add_nodes_from(range(self.n_nodes))
         for i in range(self.n_nodes):
             for j in range(i + 1, self.n_nodes):
-                self.graph.add_edge(i, j, weight=1.0, mutual_info=0.0)
+                mi = self.mutual_information(i, j)
+                if mi > MI_THRESHOLD:  # only add edges with real entanglement
+                    self.graph.add_edge(i, j, weight=1.0, mutual_info=mi)
+                # zero-MI pairs simply don't get an edge — no 10^6 distance edges
 
     def geodesic_distance(self, i: int, j: int) -> float:
         """Shortest path distance in the QIG metric (graph geodesic)."""
