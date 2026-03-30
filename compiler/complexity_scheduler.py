@@ -200,7 +200,7 @@ class ComplexityScheduler:
 
         return schedule
 
-    def simulate(self, schedule: List[ScheduledTask]) -> Dict[str, List[float]]:
+    def simulate(self, schedule: List[ScheduledTask], n_steps: int = 1000) -> Dict[str, List[float]]:
         """
         Simulate execution and track complexity, energy, and dC/dt over time.
 
@@ -209,42 +209,63 @@ class ComplexityScheduler:
         - complexity: C(t) — the 'bulk volume'
         - dcdt: dC/dt — 'gravity'
         - lloyd_fraction: dC/dt / (2E/π) — efficiency
+        
+        n_steps: number of time steps to generate (default 1000)
         """
-        times = [0.0]
-        complexity = [0.0]
-        energy = [0.0]
-        dcdt_series = [0.0]
-        lloyd_fractions = [0.0]
+        if not schedule:
+            return {
+                'times': [0.0],
+                'complexity': [0.0],
+                'energy': [0.0],
+                'dcdt': [0.0],
+                'lloyd_fraction': [0.0],
+            }
+
+        total_time = max((s.estimated_end for s in schedule), default=1.0)
+        dt_step = total_time / (n_steps - 1)
+        
+        times = []
+        complexity = []
+        energy = []
+        dcdt_series = []
+        lloyd_fractions = []
 
         C = 0.0
         E = 0.0
+        schedule_idx = 0
+        current_task_start = 0.0
+        current_task_dcdt = 0.0
+        current_task_lloyd_frac = 0.0
 
-        for st in schedule:
-            dt = st.estimated_end - st.start_time
-            dC = st.task.complexity_contribution
-            dE = st.task.compute_cost * 0.01
+        for step in range(n_steps):
+            t = step * dt_step
+            times.append(t)
 
-            # Record at task start
-            times.append(st.start_time)
+            # Find which task is running at time t
+            while schedule_idx < len(schedule) and schedule[schedule_idx].estimated_end <= t:
+                C += schedule[schedule_idx].task.complexity_contribution
+                E += schedule[schedule_idx].task.compute_cost * 0.01
+                schedule_idx += 1
+                if schedule_idx < len(schedule):
+                    current_task_start = schedule[schedule_idx].start_time
+
+            # Compute current metrics
+            if schedule_idx < len(schedule):
+                st = schedule[schedule_idx]
+                dt_task = st.estimated_end - st.start_time
+                dC = st.task.complexity_contribution
+                dE = st.task.compute_cost * 0.01
+                current_task_dcdt = dC / max(dt_task, 1e-10)
+                lloyd = self.lloyd_bound_at_energy(E + dE)
+                current_task_lloyd_frac = min(1.0, current_task_dcdt / (lloyd + 1e-10))
+            else:
+                current_task_dcdt = 0.0
+                current_task_lloyd_frac = 0.0
+
             complexity.append(C)
             energy.append(E)
-
-            # Compute dC/dt for this task
-            current_dcdt = dC / max(dt, 1e-10)
-            lloyd = self.lloyd_bound_at_energy(E + dE)
-            lloyd_frac = current_dcdt / (lloyd + 1e-10)
-
-            dcdt_series.append(current_dcdt)
-            lloyd_fractions.append(min(1.0, lloyd_frac))
-
-            # Record at task end
-            C += dC
-            E += dE
-            times.append(st.estimated_end)
-            complexity.append(C)
-            energy.append(E)
-            dcdt_series.append(0.0)
-            lloyd_fractions.append(0.0)
+            dcdt_series.append(current_task_dcdt)
+            lloyd_fractions.append(current_task_lloyd_frac)
 
         return {
             'times': times,

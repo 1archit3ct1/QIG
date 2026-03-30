@@ -211,7 +211,7 @@ def demo_compiler():
     print()
 
     # Simulate and show trajectory
-    sim = scheduler.simulate(schedule)
+    sim = scheduler.simulate(schedule, n_steps=1000)
     print("─" * 50)
     print("COMPLEXITY TRAJECTORY (bulk volume vs time)")
     print("─" * 50)
