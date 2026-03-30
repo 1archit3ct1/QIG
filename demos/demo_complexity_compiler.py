@@ -67,12 +67,19 @@ def demo_complexity():
     print(tracker.summary())
     print()
 
+    # Output scalar metrics
+    check = tracker.check_lloyd_bound()
+    print(f"SCALAR_METRIC: total_complexity={tracker.total_complexity:.4f}")
+    print(f"SCALAR_METRIC: bulk_volume={tracker.bulk_volume():.4f}")
+    print(f"SCALAR_METRIC: dcdt={check['dC/dt']:.4f}")
+    print(f"SCALAR_METRIC: lloyd_fraction={check['fraction']:.4f}")
+
     # Compute mean dC/dt from history
     if tracker.history:
         dcdt_values = [snapshot.dcdt for snapshot in tracker.history if snapshot.dcdt is not None]
         if dcdt_values:
             mean_dcdt = sum(dcdt_values) / len(dcdt_values)
-            print(f"  Mean dC/dt over simulation: {mean_dcdt:.6f}")
+            print(f"SCALAR_METRIC: mean_dcdt={mean_dcdt:.6f}")
     print()
 
     # Output interpolated time series for GUI chart (1000 time steps)

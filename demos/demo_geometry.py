@@ -52,7 +52,7 @@ def demo_geometry():
         for j in range(i+1, n):
             mi = graph.mutual_information(i, j)
             d = graph.metric_distance(i, j)
-            print(f"  Q{i}↔Q{j}: MI={mi:.6f}, distance={d:.2f}")
+            print(f"  QUANTUM_NODE: Q{i}↔Q{j} mutual_info={mi:.6f} distance={d:.2f}")
 
     print()
 
@@ -68,13 +68,13 @@ def demo_geometry():
     graph.set_state(rho_4)
     metric = graph.compute_metric()
 
-    print(f"Total entanglement: {graph.total_entanglement():.4f}")
+    print(f"SCALAR_METRIC: total_entanglement={graph.total_entanglement():.4f}")
     for i in range(n):
         for j in range(i+1, n):
             mi = graph.mutual_information(i, j)
             d = graph.metric_distance(i, j)
             nearby = "★ CLOSE (entangled)" if mi > 0.5 else "  far"
-            print(f"  Q{i}↔Q{j}: MI={mi:.4f}, distance={d:.4f}  {nearby}")
+            print(f"  QUANTUM_NODE: Q{i}↔Q{j} mutual_info={mi:.4f} distance={d:.4f}  {nearby}")
 
     print()
 
@@ -87,12 +87,12 @@ def demo_geometry():
     graph.set_state(maximally_entangled_state(n, d=2))
     metric = graph.compute_metric()
 
-    print(f"Total entanglement: {graph.total_entanglement():.4f}")
+    print(f"SCALAR_METRIC: total_entanglement={graph.total_entanglement():.4f}")
     for i in range(n):
         for j in range(i+1, n):
             mi = graph.mutual_information(i, j)
             d = graph.metric_distance(i, j)
-            print(f"  Q{i}↔Q{j}: MI={mi:.4f}, distance={d:.4f}")
+            print(f"  QUANTUM_NODE: Q{i}↔Q{j} mutual_info={mi:.4f} distance={d:.4f}")
 
     print()
     print(graph.summary())
@@ -125,8 +125,9 @@ def demo_geometry():
     peak_S = max(entropies)
     final_S = entropies[-1]
 
-    print(f"Peak entropy: {peak_S:.4f} at t={peak_t} (Page time)")
-    print(f"Final entropy: {final_S:.4f} (should approach 0 → information recovered)")
+    print(f"SCALAR_METRIC: page_time={peak_t}")
+    print(f"SCALAR_METRIC: peak_entropy={peak_S:.4f}")
+    print(f"SCALAR_METRIC: final_entropy={final_S:.4f}")
     print(f"Information recovery: {'YES ✓' if final_S < peak_S * 0.8 else 'PARTIAL'}")
 
     # ASCII plot
@@ -137,7 +138,7 @@ def demo_geometry():
         S = entropies[i]
         bar_len = int(S / max_S * 40)
         bar = "█" * bar_len
-        print(f"  t={t:3d}: {bar} {S:.3f}")
+        print(f"  QUANTUM_NODE: t={t:3d} entropy={S:.3f}")
 
     print("\n✓ DEMO 1 COMPLETE: Geometry emerges from entanglement.")
 

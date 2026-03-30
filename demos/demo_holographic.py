@@ -59,8 +59,8 @@ def demo_holographic():
         print(f"  Large boundary region (size {len(large_region)}): "
               f"{'✓ Reconstructible' if result_large.success else '✗ Cannot reconstruct'}")
         print(f"  RT formula check: {'✓ holds' if result_large.rt_check else '≈ approximate'}")
-        print(f"  Boundary entropy: {result_large.boundary_entropy:.4f}")
-        print(f"  RT surface area:  {result_large.entanglement_wedge_area:.4f}")
+        print(f"  SCALAR_METRIC: boundary_entropy={result_large.boundary_entropy:.4f}")
+        print(f"  SCALAR_METRIC: rt_surface_area={result_large.entanglement_wedge_area:.4f}")
         print()
 
     # Error correction
@@ -116,7 +116,7 @@ def demo_holographic():
     for layer, S in profile:
         bar = "█" * max(1, int(S * 8))
         label = "← UV (boundary)" if layer == 0 else ("← IR (bulk)" if layer == len(profile)-1 else "")
-        print(f"  Layer {layer}: {bar:20s} S={S:.4f}  {label}")
+        print(f"  QUANTUM_NODE: layer={layer} entropy={S:.4f} {label}")
 
     print()
     print("✓ DEMO 2 COMPLETE: Bulk geometry reconstructed from boundary data.")

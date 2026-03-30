@@ -72,7 +72,8 @@ function parsePageCurve(stdout: string): MetricPoint[] {
   const lines = stdout.split('\n')
 
   for (const line of lines) {
-    const match = line.match(/^\s*t=\s*(\d+):.*?([0-9]+\.[0-9]+)/)
+    // Support both old format and new QUANTUM_NODE tagged format
+    const match = line.match(/(?:QUANTUM_NODE:\s*)?t=\s*(\d+).*?entropy=([0-9]+\.[0-9]+)/)
     if (!match) {
       continue
     }
@@ -160,8 +161,22 @@ export function parseSimulationOutput(
   const cards: MetricCard[] = []
   const charts: MetricChart[] = []
 
+  // Parse new SCALAR_METRIC tagged format
+  for (const match of stdout.matchAll(/SCALAR_METRIC:\s*(\w+)=([0-9]+\.?[0-9]*)/g)) {
+    const key = match[1]
+    const value = Number.parseFloat(match[2])
+    if (Number.isFinite(value)) {
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      cards.push({
+        label,
+        value: value.toFixed(4),
+      })
+    }
+  }
+
+  // Fallback to old format if no SCALAR_METRIC tags found
   const totalEntanglement = extractFloat(/Total entanglement:\s*([0-9]+\.?[0-9]*)/, stdout)
-  if (totalEntanglement !== null) {
+  if (totalEntanglement !== null && cards.length === 0) {
     cards.push({
       label: 'Total Entanglement',
       value: totalEntanglement.toFixed(4),
@@ -169,7 +184,7 @@ export function parseSimulationOutput(
   }
 
   const peakEntropy = extractFloat(/Peak entropy:\s*([0-9]+\.?[0-9]*)/, stdout)
-  if (peakEntropy !== null) {
+  if (peakEntropy !== null && !cards.some(c => c.label.includes('Peak'))) {
     cards.push({
       label: 'Peak Radiation Entropy',
       value: peakEntropy.toFixed(4),
@@ -177,7 +192,7 @@ export function parseSimulationOutput(
   }
 
   const finalEntropy = extractFloat(/Final entropy:\s*([0-9]+\.?[0-9]*)/, stdout)
-  if (finalEntropy !== null) {
+  if (finalEntropy !== null && !cards.some(c => c.label.includes('Final'))) {
     cards.push({
       label: 'Final Radiation Entropy',
       value: finalEntropy.toFixed(4),
@@ -185,7 +200,7 @@ export function parseSimulationOutput(
   }
 
   const totalComplexity = extractFloat(/Total complexity C\(t\):\s*([0-9]+\.?[0-9]*)/, stdout)
-  if (totalComplexity !== null) {
+  if (totalComplexity !== null && !cards.some(c => c.label.includes('Complexity'))) {
     cards.push({
       label: 'Total Complexity C(t)',
       value: totalComplexity.toFixed(4),
@@ -193,7 +208,7 @@ export function parseSimulationOutput(
   }
 
   const commImprovement = extractFloat(/Improvement:\s*([0-9]+\.?[0-9]*)% reduction/, stdout)
-  if (commImprovement !== null) {
+  if (commImprovement !== null && !cards.some(c => c.label.includes('Gain'))) {
     cards.push({
       label: 'Compiler Communication Gain',
       value: `${commImprovement.toFixed(1)}%`,
